@@ -1,1 +1,1 @@
-export { News as default } from '../AllModules'
+export { News as default } from './AllModules'

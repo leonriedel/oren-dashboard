@@ -1,1 +1,1 @@
-export { TalkToOren as default } from '../AllModules'
+export { TalkToOren as default } from './AllModules'

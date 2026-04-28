@@ -1,1 +1,1 @@
-export { ThinkSpace as default } from '../AllModules'
+export { ThinkSpace as default } from './AllModules'

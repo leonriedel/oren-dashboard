@@ -1,1 +1,1 @@
-export { Investments as default } from '../AllModules'
+export { Investments as default } from './AllModules'

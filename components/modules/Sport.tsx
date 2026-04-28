@@ -1,1 +1,1 @@
-export { Sport as default } from '../AllModules'
+export { Sport as default } from './AllModules'

@@ -1,1 +1,1 @@
-export { SocialMedia as default } from '../AllModules'
+export { SocialMedia as default } from './AllModules'
