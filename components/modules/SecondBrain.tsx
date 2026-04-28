@@ -15,6 +15,8 @@ export default function SecondBrain({ user, onBack }: Props) {
   const [newPrio, setNewPrio] = useState('')
   const [newGoal, setNewGoal] = useState('')
   const [loading, setLoading] = useState(true)
+  const [events, setEvents] = useState<any[]>([])
+  const [eventsLoading, setEventsLoading] = useState(true)
 
   const defaultNN = [
     { emoji:'💪', label:'SPORT', done:false, sort_order:0 },
@@ -26,7 +28,25 @@ export default function SecondBrain({ user, onBack }: Props) {
 
   useEffect(() => {
     load()
+    fetch('/api/calendar')
+      .then(r => r.json())
+      .then(d => { setEvents(d.events || []); setEventsLoading(false) })
+      .catch(() => setEventsLoading(false))
   }, [])
+
+  function formatEventDate(dateStr: string) {
+    const d = new Date(dateStr)
+    const today = new Date()
+    const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+    if (d.toDateString() === today.toDateString()) return 'Heute'
+    if (d.toDateString() === tomorrow.toDateString()) return 'Morgen'
+    return d.toLocaleDateString('de', { weekday: 'short', day: 'numeric', month: 'short' })
+  }
+
+  function formatEventTime(dateStr: string) {
+    if (!dateStr.includes('T')) return null
+    return new Date(dateStr).toLocaleTimeString('de', { hour: '2-digit', minute: '2-digit' })
+  }
 
   async function load() {
     setLoading(true)
@@ -38,7 +58,6 @@ export default function SecondBrain({ user, onBack }: Props) {
     setPrios(p.data || [])
     setGoals(g.data || [])
     if (!n.data?.length) {
-      // seed defaults
       const { data } = await supabase.from('non_negotiables').insert(defaultNN.map(d => ({ ...d, user_id: user.id }))).select()
       setNn(data || [])
     } else setNn(n.data)
@@ -94,6 +113,17 @@ export default function SecondBrain({ user, onBack }: Props) {
   const recs = ['Deep Work Block: Ablenkungen minimieren.','Top Prio zuerst — alles andere ist zweitrangig.','Energie hoch? Jetzt die härteste Aufgabe.','Review: Was hat heute funktioniert?','Wochenende nutzen: Planen, reflektieren, aufladen.']
   const rec = recs[new Date().getDay() % recs.length]
 
+  const todayEvents = events.filter(e => {
+    const d = new Date(e.date)
+    const today = new Date()
+    return d.toDateString() === today.toDateString()
+  })
+  const upcomingEvents = events.filter(e => {
+    const d = new Date(e.date)
+    const today = new Date()
+    return d.toDateString() !== today.toDateString()
+  })
+
   return (
     <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor="#00aadd" sub="Daily Operations & Execution" iconBg="linear-gradient(135deg, #005577, #0088bb)">
       {/* Mission */}
@@ -137,9 +167,43 @@ export default function SecondBrain({ user, onBack }: Props) {
         </div>
       </div>
 
+      {/* TAGESPLAN — Notion Calendar */}
+      <Card>
+        <SectionTitle color="var(--cyan)" action={<span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--muted2)' }}>{new Date().toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit'})}</span>}>
+          TAGESPLAN
+        </SectionTitle>
+        {eventsLoading ? (
+          <div style={{ color:'var(--muted)', fontSize:13, padding:'8px 0' }}>Lade Kalender...</div>
+        ) : todayEvents.length === 0 ? (
+          <div style={{ color:'var(--muted)', fontSize:13, padding:'8px 0' }}>Keine Termine heute</div>
+        ) : (
+          todayEvents.map(e => (
+            <div key={e.id} style={{ display:'flex', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
+              <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--cyan)', minWidth:40, marginTop:2 }}>
+                {formatEventTime(e.date) || '📅'}
+              </div>
+              <div style={{ flex:1, fontSize:14 }}>{e.title}</div>
+            </div>
+          ))
+        )}
+        {upcomingEvents.length > 0 && (
+          <>
+            <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--muted)', margin:'14px 0 8px', textTransform:'uppercase' }}>THIS WEEK</div>
+            {upcomingEvents.slice(0,5).map(e => (
+              <div key={e.id} style={{ display:'flex', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
+                <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--muted2)', minWidth:60, marginTop:2 }}>
+                  {formatEventDate(e.date)}
+                </div>
+                <div style={{ flex:1, fontSize:14 }}>{e.title}</div>
+              </div>
+            ))}
+          </>
+        )}
+      </Card>
+
       {/* Top Prio */}
       <Card>
-        <SectionTitle color="var(--red)" action={<button onClick={() => {}} style={{ background:'none', border:'none', color:'var(--cyan)', fontSize:20, cursor:'pointer', lineHeight:1 }}>+</button>}>TOP PRIO</SectionTitle>
+        <SectionTitle color="var(--red)">TOP PRIO</SectionTitle>
         {!prios.length && <div style={{ color:'var(--muted)', fontSize:13, textAlign:'center', padding:'8px 0' }}>Keine Prioritäten — hinzufügen ↓</div>}
         {prios.map(p => (
           <ItemRow key={p.id}>
