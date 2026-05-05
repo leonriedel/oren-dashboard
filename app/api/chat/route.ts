@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const tools: Anthropic.Tool[] = [
+const tools: any[] = [
   {
     name: 'add_priority',
     description: 'Fügt eine neue Top Priorität in SecondBrain hinzu',
@@ -85,7 +85,7 @@ Du bist sein persönlicher Assistent. Wenn Leon dir sagt "trag X als Prio ein" o
 
 Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
 
-    let response = await anthropic.messages.create({
+    let response: any = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
       system: systemPrompt,
@@ -94,19 +94,19 @@ Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
     })
 
     const actions: string[] = []
-    let conversationMessages = [...messages.slice(-15)]
+    let conversationMessages: any[] = [...messages.slice(-15)]
 
     while (response.stop_reason === 'tool_use') {
       const toolUses = response.content.filter((b: any) => b.type === 'tool_use')
       const toolResults: any[] = []
 
-      for (const tool of toolUses as any[]) {
+      for (const tool of toolUses) {
         let result = 'OK'
         try {
           const input = tool.input
           if (tool.name === 'add_priority') {
             await supabase.from('priorities').insert({ user_id: userId, text: input.text, done: false })
-            actions.push(`✓ Prio hinzugefügt: ${input.text}`)
+            actions.push(`✓ Prio: ${input.text}`)
           } else if (tool.name === 'add_goal') {
             await supabase.from('goals').insert({ user_id: userId, text: input.text, done: false })
             actions.push(`✓ Goal: ${input.text}`)
@@ -152,7 +152,7 @@ Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
       })
     }
 
-    const textBlock = response.content.find((b: any) => b.type === 'text') as any
+    const textBlock = response.content.find((b: any) => b.type === 'text')
     const text = textBlock?.text || (actions.length ? actions.join('\n') : 'OK')
     return NextResponse.json({ content: text, actions })
   } catch (error: any) {
