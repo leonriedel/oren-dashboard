@@ -4,12 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const tools: any[] = [
+const tools = [
   {
     name: 'add_priority',
     description: 'Fügt eine neue Top Priorität in SecondBrain hinzu',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: { text: { type: 'string', description: 'Die Aufgabe' } },
       required: ['text']
     }
@@ -18,7 +18,7 @@ const tools: any[] = [
     name: 'add_goal',
     description: 'Fügt ein neues Weekly Goal hinzu',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: { text: { type: 'string', description: 'Das Wochenziel' } },
       required: ['text']
     }
@@ -27,7 +27,7 @@ const tools: any[] = [
     name: 'add_thinkspace_entry',
     description: 'Speichert eine Idee, Strategie, Entscheidung oder Future Plan in ThinkSpace',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         type: { type: 'string', enum: ['idea','strategy','decision','future'] },
         text: { type: 'string' }
@@ -39,7 +39,7 @@ const tools: any[] = [
     name: 'add_transaction',
     description: 'Fügt eine Einnahme oder Ausgabe in Finances hinzu',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: {
         type: { type: 'string', enum: ['income','expense'] },
         description: { type: 'string' },
@@ -53,7 +53,7 @@ const tools: any[] = [
     name: 'add_food_note',
     description: 'Fügt eine Ernährungsnotiz hinzu',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: { text: { type: 'string' } },
       required: ['text']
     }
@@ -62,7 +62,7 @@ const tools: any[] = [
     name: 'add_brain_dump',
     description: 'Speichert eine schnelle Idee/Notiz in Social Media Brain Dump',
     input_schema: {
-      type: 'object',
+      type: 'object' as const,
       properties: { text: { type: 'string' } },
       required: ['text']
     }
@@ -85,13 +85,15 @@ Du bist sein persönlicher Assistent. Wenn Leon dir sagt "trag X als Prio ein" o
 
 Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
 
-    let response: any = await anthropic.messages.create({
+    const params: any = {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 1024,
       system: systemPrompt,
-      tools,
+      tools: tools,
       messages: messages.slice(-15)
-    })
+    }
+
+    let response: any = await anthropic.messages.create(params)
 
     const actions: string[] = []
     let conversationMessages: any[] = [...messages.slice(-15)]
@@ -143,13 +145,14 @@ Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
         { role: 'user', content: toolResults }
       ]
 
-      response = await anthropic.messages.create({
+      const nextParams: any = {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
         system: systemPrompt,
-        tools,
+        tools: tools,
         messages: conversationMessages
-      })
+      }
+      response = await anthropic.messages.create(nextParams)
     }
 
     const textBlock = response.content.find((b: any) => b.type === 'text')
