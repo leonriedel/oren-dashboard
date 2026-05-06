@@ -1,87 +1,183 @@
 'use client'
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase'
-import type { User } from '@supabase/supabase-js'
+import { useState, useEffect, useRef } from 'react'
+import { ModuleLayout } from '../ModuleLayout'
+import { supabase } from '../../lib/supabase'
 
-interface Props { user: User; onBack: () => void }
+type Action = {
+  type: string
+  text?: string
+  category?: string
+  kind?: string
+  description?: string
+  amount?: number
+}
 
-export default function TalkToOren({ user, onBack }: Props) {
-  const supabase = createClient()
-  const [messages, setMessages] = useState<any[]>([{ role:'assistant', content:'Hey Leon! Ich bin OREN. Sag mir was zu tun ist — Prios, Notizen, Ausgaben, Ideen. Ich trag es direkt ein.' }])
+type Message = {
+  role: 'user' | 'assistant'
+  content: string
+  actions?: Action[]
+  executedActions?: string[]
+}
+
+export function TalkToOren() {
+  const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setUserId(data.user.id)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
+
+  async function executeActions(actions: Action[]): Promise<string[]> {
+    if (!userId) return []
+    const results: string[] = []
+    for (const action of actions) {
+      try {
+        if (action.type === 'add_priority' && action.text) {
+          await supabase.from('priorities').insert({ user_id: userId, text: action.text, done: false })
+          results.push(`✓ Prio: ${action.text}`)
+        } else if (action.type === 'add_goal' && action.text) {
+          await supabase.from('goals').insert({ user_id: userId, text: action.text, done: false })
+          results.push(`✓ Goal: ${action.text}`)
+        } else if (action.type === 'add_thinkspace' && action.text) {
+          await supabase.from('thinkspace').insert({ user_id: userId, type: action.category || 'idea', text: action.text })
+          results.push(`✓ ThinkSpace (${action.category}): ${action.text}`)
+        } else if (action.type === 'add_transaction' && action.description && action.amount) {
+          await supabase.from('transactions').insert({
+            user_id: userId,
+            type: action.kind || 'expense',
+            description: action.description,
+            amount: action.amount,
+            category: action.category || (action.kind === 'expense' ? 'private' : 'business'),
+            date: new Date().toISOString().split('T')[0]
+          })
+          results.push(`✓ ${action.kind === 'income' ? 'Einnahme' : 'Ausgabe'}: ${action.description} (${action.amount}€)`)
+        } else if (action.type === 'add_food_note' && action.text) {
+          await supabase.from('food_notes').insert({ user_id: userId, text: action.text })
+          results.push(`✓ Ernährung: ${action.text}`)
+        } else if (action.type === 'add_brain_dump' && action.text) {
+          await supabase.from('brain_dump').insert({ user_id: userId, text: action.text })
+          results.push(`✓ Brain Dump: ${action.text}`)
+        }
+      } catch (err) {
+        console.error('Action error:', err)
+        results.push(`✗ Fehler bei ${action.type}`)
+      }
+    }
+    return results
+  }
 
   async function send() {
     if (!input.trim() || loading) return
-    const userMsg = { role: 'user', content: input.trim() }
-    const newMsgs = [...messages, userMsg]
-    setMessages(newMsgs)
+    const userMsg: Message = { role: 'user', content: input }
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
     setInput('')
     setLoading(true)
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMsgs,
-          userId: user.id,
-          accessToken: session?.access_token
-        })
+        body: JSON.stringify({ messages: newMessages.map(m => ({ role: m.role, content: m.content })) })
       })
       const data = await res.json()
-      const reply = { role: 'assistant', content: data.content || 'Fehler.', actions: data.actions || [] }
-      setMessages(p => [...p, reply])
-    } catch {
-      setMessages(p => [...p, { role: 'assistant', content: 'Verbindungsfehler.' }])
+
+      let executedActions: string[] = []
+      if (data.actions && data.actions.length > 0) {
+        executedActions = await executeActions(data.actions)
+      }
+
+      setMessages([...newMessages, {
+        role: 'assistant',
+        content: data.content,
+        actions: data.actions,
+        executedActions
+      }])
+    } catch (err) {
+      setMessages([...newMessages, { role: 'assistant', content: 'Fehler. Probier nochmal.' }])
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:14, padding:'20px 20px 16px', borderBottom:'1px solid var(--border)', background:'var(--bg)' }}>
-        <button onClick={onBack} style={{ width:34, height:34, borderRadius:'50%', background:'var(--card)', border:'1px solid var(--border)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--muted2)', fontSize:18 }}>‹</button>
-        <div style={{ width:40, height:40, borderRadius:11, background:'linear-gradient(135deg, #006688, #00aadd)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>🎙️</div>
-        <div>
-          <div style={{ fontFamily:'var(--mono)', fontSize:15, fontWeight:700, letterSpacing:2, color:'var(--cyan)' }}>TALK TO OREN</div>
-          <div style={{ fontSize:10, letterSpacing:3, color:'var(--muted)' }}>AI · ASSISTANT</div>
+    <ModuleLayout title="Talk to Oren">
+      <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {messages.length === 0 && (
+            <div style={{ color: '#666', fontSize: '14px', textAlign: 'center', marginTop: '40px' }}>
+              Sprich mit Oren. Sag ihm was du planst, ausgegeben hast oder dir merken willst.
+            </div>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} style={{
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              maxWidth: '85%',
+              padding: '10px 14px',
+              borderRadius: '12px',
+              background: m.role === 'user' ? '#2a2a2a' : '#1a1a1a',
+              border: '1px solid #333',
+              fontSize: '14px',
+              lineHeight: 1.5,
+              whiteSpace: 'pre-wrap'
+            }}>
+              {m.content}
+              {m.executedActions && m.executedActions.length > 0 && (
+                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #333', fontSize: '12px', color: '#7dd3a0', fontFamily: 'Space Mono, monospace' }}>
+                  {m.executedActions.map((a, j) => <div key={j}>{a}</div>)}
+                </div>
+              )}
+            </div>
+          ))}
+          {loading && <div style={{ color: '#666', fontSize: '13px', alignSelf: 'flex-start' }}>Oren denkt...</div>}
+        </div>
+        <div style={{ display: 'flex', gap: '8px', padding: '12px', borderTop: '1px solid #2a2a2a' }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') send() }}
+            placeholder="Was planst du?"
+            style={{
+              flex: 1,
+              background: '#1a1a1a',
+              border: '1px solid #333',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              color: '#fff',
+              fontSize: '14px',
+              fontFamily: 'inherit'
+            }}
+          />
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            style={{
+              background: '#fff',
+              color: '#000',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '0 18px',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: loading ? 'wait' : 'pointer',
+              opacity: !input.trim() ? 0.4 : 1
+            }}
+          >
+            Send
+          </button>
         </div>
       </div>
-
-      <div style={{ flex:1, overflowY:'auto', padding:'16px', display:'flex', flexDirection:'column', gap:12 }}>
-        {messages.map((m, i) => (
-          <div key={i}>
-            <div style={{ display:'flex', justifyContent: m.role==='user' ? 'flex-end' : 'flex-start' }}>
-              <div style={{ maxWidth:'85%', padding:'12px 16px', borderRadius:16, fontSize:14, lineHeight:1.6, background: m.role==='user' ? 'var(--cyan2)' : 'var(--card2)', border: m.role==='user' ? 'none' : '1px solid var(--border)', borderBottomRightRadius: m.role==='user' ? 4 : 16, borderBottomLeftRadius: m.role==='user' ? 16 : 4, color: m.role==='user' ? 'white' : 'var(--text)', whiteSpace:'pre-wrap' }}>
-                {m.content}
-              </div>
-            </div>
-            {m.actions && m.actions.length > 0 && (
-              <div style={{ marginTop:6, paddingLeft:8 }}>
-                {m.actions.map((a: string, j: number) => (
-                  <div key={j} style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--green)', padding:'3px 0' }}>{a}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-        {loading && (
-          <div style={{ display:'flex', justifyContent:'flex-start' }}>
-            <div style={{ padding:'14px 16px', borderRadius:16, background:'var(--card2)', border:'1px solid var(--border)', display:'flex', gap:4, alignItems:'center' }}>
-              {[0,0.2,0.4].map((d,i) => <span key={i} style={{ width:6, height:6, borderRadius:'50%', background:'var(--muted)', display:'inline-block', animation:`typing 1.2s ease-in-out ${d}s infinite` }} />)}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ padding:'12px 16px', borderTop:'1px solid var(--border)', display:'flex', gap:10, background:'var(--bg)' }}>
-        <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key==='Enter'&&send()} placeholder="Sag mir was zu tun ist..." style={{ flex:1, background:'var(--card)', border:'1px solid var(--border)', borderRadius:24, padding:'12px 18px', color:'var(--text)', fontSize:14, outline:'none' }} />
-        <button onClick={send} disabled={loading} style={{ width:44, height:44, borderRadius:'50%', background:'var(--cyan2)', border:'none', cursor:'pointer', color:'white', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' }}>↑</button>
-      </div>
-
-      <style>{`@keyframes typing { 0%,60%,100%{transform:translateY(0);opacity:0.4} 30%{transform:translateY(-6px);opacity:1} }`}</style>
-    </div>
+    </ModuleLayout>
   )
 }
