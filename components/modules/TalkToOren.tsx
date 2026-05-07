@@ -19,7 +19,7 @@ type Message = {
   executedActions?: string[]
 }
 
-export function TalkToOren() {
+export default function TalkToOren() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
