@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { ModuleLayout } from '../ModuleLayout'
 import { supabase } from '../../lib/supabase'
 
 type Action = {
@@ -112,8 +111,12 @@ export function TalkToOren() {
   }
 
   return (
-    <ModuleLayout title="Talk to Oren">
-      <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#fff', padding: '20px', maxWidth: '480px', margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <a href="/dashboard" style={{ color: '#888', textDecoration: 'none', fontSize: '14px' }}>← Dashboard</a>
+        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Talk to Oren</h1>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '80vh', border: '1px solid #2a2a2a', borderRadius: '12px' }}>
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {messages.length === 0 && (
             <div style={{ color: '#666', fontSize: '14px', textAlign: 'center', marginTop: '40px' }}>
@@ -178,6 +181,6 @@ export function TalkToOren() {
           </button>
         </div>
       </div>
-    </ModuleLayout>
+    </div>
   )
 }
