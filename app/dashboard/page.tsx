@@ -213,6 +213,9 @@ export default function Dashboard() {
     if (!clean) return
     const u = new SpeechSynthesisUtterance(clean)
     u.lang = 'de-DE'
+    const voices = window.speechSynthesis.getVoices()
+    const male = voices.find(v => v.lang.startsWith('de') && /markus|yannick|male|mann/i.test(v.name)) || voices.find(v => v.lang.startsWith('de'))
+    if (male) u.voice = male
     u.rate = 1.05
     u.pitch = 0.95
     u.onstart = () => setOrbState('speaking')
