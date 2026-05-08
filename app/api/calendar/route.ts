@@ -20,16 +20,16 @@ export async function GET(req: NextRequest) {
         filter: {
           and: [
             {
-              property: 'Date',
+              property: 'Datum',
               date: { on_or_after: startOfDay }
             },
             {
-              property: 'Date', 
+              property: 'Datum', 
               date: { before: endOfWeek }
             }
           ]
         },
-        sorts: [{ property: 'Date', direction: 'ascending' }],
+        sorts: [{ property: 'Datum', direction: 'ascending' }],
         page_size: 20,
       })
     })
