@@ -345,7 +345,7 @@ export default function Dashboard() {
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 {events.map(e => (
                   <div key={e.id} style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
-                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, color:'#a0c0ff', minWidth:48, paddingTop:2 }}>{e.time || (e.start ? new Date(e.start).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : '')}</div>
+                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, color:'#a0c0ff', minWidth:48, paddingTop:2 }}>{e.time || (e.date ? new Date(e.date).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : '')}</div>
                     <div style={{ fontSize:13, color:'#dde7ff', lineHeight:1.4 }}>{e.title}</div>
                   </div>
                 ))}
