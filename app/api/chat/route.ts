@@ -1,72 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-const systemPrompt = `Du bist OREN, das Personal AI Operating System von Leon Riedel. Leon lebt in Bali, führt riedel.ai. Seine Non-Negotiables: Sport, Meditation, Mails, Insta-Post, OREN. Sein Fokus: Deep Work, System aufbauen.
-
-Du bist sein persönlicher Assistent und Planungshelfer. Wenn Leon dir sagt was er machen will, willst, planen will oder ausgegeben hat — dann gibst du am ENDE deiner Antwort einen JSON-Block zurück mit den Aktionen die ausgeführt werden sollen.
-
-Format am Ende deiner Antwort (NUR wenn Aktionen nötig sind):
-
-\`\`\`actions
-[
-  {"type": "add_priority", "text": "..."},
-  {"type": "add_goal", "text": "..."},
-  {"type": "add_thinkspace", "category": "idea|strategy|decision|future", "text": "..."},
-  {"type": "add_transaction", "kind": "income|expense", "description": "...", "amount": 50, "category": "business|private"},
-  {"type": "add_food_note", "text": "..."},
-  {"type": "add_brain_dump", "text": "..."},
-  {"type": "add_event", "title": "...", "start": "2026-05-13T15:00:00+08:00", "end": "2026-05-13T16:00:00+08:00", "notes": "..."}
-]
-\`\`\`
-
-Beispiele:
-- Leon: "Trag Sport als Top Prio ein" → Antwort: "Erledigt." + actions [{"type":"add_priority","text":"Sport"}]
-- Leon: "100€ ausgegeben für Mittagessen" → "Notiert." + actions [{"type":"add_transaction","kind":"expense","description":"Mittagessen","amount":100,"category":"private"}]
-- Leon: "Plan mir den Tag: Sport, Mails, Deep Work an OREN" → "Hab dir 3 Prios eingetragen." + actions [...]
-- Leon: "Trag morgen 15 Uhr Termin mit Alicia ein" → "Termin eingetragen." + actions [{"type":"add_event","title":"Termin mit Alicia","start":"2026-05-14T15:00:00+08:00","end":"2026-05-14T16:00:00+08:00"}]
-- Leon: "Was meinst du dazu?" → Normale Antwort, KEINE actions
-
-WICHTIG bei add_event:
-- start/end müssen ISO-8601 Format haben mit Bali-Zeitzone +08:00
-- Wenn Leon keine Endzeit nennt, setze end = start + 1 Stunde
-- Heutiges Datum: ${new Date().toISOString().split('T')[0]}, Wochentag heute: ${['So','Mo','Di','Mi','Do','Fr','Sa'][new Date().getDay()]}
-
-Wenn Leon nur quatscht oder fragt — antworte normal, OHNE actions Block.
-
-Antworte direkt, präzise, auf Deutsch. Kein Smalltalk.`
+const BOT_TOKEN = '8751181916:AAEdnCMTjrADiP4Xosp0h1a0CaA-ppdMMq0'
+const CHAT_ID = '7891571339'
 
 export async function POST(req: NextRequest) {
-  try {
-    const { messages } = await req.json()
+  const { messages } = await req.json()
+  const lastMessage = messages[messages.length - 1]?.content
+  if (!lastMessage) return NextResponse.json({ content: 'Keine Nachricht.' })
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: messages.slice(-15)
-    })
+  // Send to OREN via Telegram
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: CHAT_ID, text: lastMessage }),
+  })
 
-    const textBlock: any = response.content.find((b: any) => b.type === 'text')
-    const fullText = textBlock?.text || 'OK'
+  // Wait for OREN to respond (poll for 15 seconds)
+  let reply = 'OREN hat die Nachricht empfangen. Antwort folgt auf Telegram.'
+  const offset_res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=1&allowed_updates=["message"]`)
+  const offset_data = await offset_res.json()
+  const lastUpdateId = offset_data.result?.slice(-1)[0]?.update_id || 0
 
-    let actions: any[] = []
-    let displayText = fullText
-
-    const match = fullText.match(/```actions\s*([\s\S]*?)\s*```/)
-    if (match) {
-      try {
-        actions = JSON.parse(match[1])
-        displayText = fullText.replace(/```actions[\s\S]*?```/, '').trim()
-      } catch (e) {
-        console.error('Failed to parse actions:', e)
-      }
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 1500))
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}&limit=5`)
+    const data = await res.json()
+    const botReply = data.result?.find((u: any) => u.message?.from?.is_bot && u.message?.chat?.id === parseInt(CHAT_ID))
+    if (botReply) {
+      reply = botReply.message.text
+      break
     }
-
-    return NextResponse.json({ content: displayText, actions })
-  } catch (error: any) {
-    console.error('Chat API error:', error)
-    return NextResponse.json({ content: 'API Fehler. Prüfe Logs.', error: String(error) }, { status: 500 })
   }
+
+  return NextResponse.json({ content: reply })
 }

@@ -12,6 +12,7 @@ import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
 import SocialMedia from '@/components/modules/SocialMedia'
 import TalkToOren from '@/components/modules/TalkToOren'
+import GlobalParticles from '@/components/GlobalParticles'
 
 type Screen = 'home' | 'brain' | 'finance' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
@@ -329,6 +330,8 @@ export default function Dashboard() {
   const stateLabel = orbState === 'thinking' ? 'PROCESSING' : orbState === 'speaking' ? 'SPEAKING' : orbState === 'listening' ? 'LISTENING' : 'STANDBY'
 
   return (
+    <>
+      <GlobalParticles active={orbState !== 'idle'} />
     <div style={{ minHeight:'100vh', background:'radial-gradient(ellipse at center, #0a1530 0%, #050810 60%, #000 100%)', color:'#e0e8ff', fontFamily:'DM Sans, system-ui, sans-serif', position:'relative', overflow:'hidden' }}>
       {/* Top bar */}
       <div style={{ position:'absolute', top:20, left:0, right:0, display:'flex', justifyContent:'space-between', padding:'0 28px', fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:3, color:'#5a7ab5', zIndex:5 }}>
@@ -435,5 +438,6 @@ export default function Dashboard() {
         }
       `}</style>
     </div>
+    </>
   )
 }
