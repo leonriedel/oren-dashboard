@@ -17,7 +17,7 @@ type Screen = 'home' | 'brain' | 'finance' | 'invest' | 'news' | 'think' | 'spor
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
-type CalEvent = { id: string; title: string; start?: string; time?: string }
+type CalEvent = { id: string; title: string; date?: string; time?: string }
 
 export default function Dashboard() {
   const router = useRouter()
