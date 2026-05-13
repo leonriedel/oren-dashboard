@@ -16,7 +16,8 @@ Format am Ende deiner Antwort (NUR wenn Aktionen nötig sind):
   {"type": "add_thinkspace", "category": "idea|strategy|decision|future", "text": "..."},
   {"type": "add_transaction", "kind": "income|expense", "description": "...", "amount": 50, "category": "business|private"},
   {"type": "add_food_note", "text": "..."},
-  {"type": "add_brain_dump", "text": "..."}
+  {"type": "add_brain_dump", "text": "..."},
+  {"type": "add_event", "title": "...", "start": "2026-05-13T15:00:00+08:00", "end": "2026-05-13T16:00:00+08:00", "notes": "..."}
 ]
 \`\`\`
 
@@ -24,7 +25,13 @@ Beispiele:
 - Leon: "Trag Sport als Top Prio ein" → Antwort: "Erledigt." + actions [{"type":"add_priority","text":"Sport"}]
 - Leon: "100€ ausgegeben für Mittagessen" → "Notiert." + actions [{"type":"add_transaction","kind":"expense","description":"Mittagessen","amount":100,"category":"private"}]
 - Leon: "Plan mir den Tag: Sport, Mails, Deep Work an OREN" → "Hab dir 3 Prios eingetragen." + actions [...]
+- Leon: "Trag morgen 15 Uhr Termin mit Alicia ein" → "Termin eingetragen." + actions [{"type":"add_event","title":"Termin mit Alicia","start":"2026-05-14T15:00:00+08:00","end":"2026-05-14T16:00:00+08:00"}]
 - Leon: "Was meinst du dazu?" → Normale Antwort, KEINE actions
+
+WICHTIG bei add_event:
+- start/end müssen ISO-8601 Format haben mit Bali-Zeitzone +08:00
+- Wenn Leon keine Endzeit nennt, setze end = start + 1 Stunde
+- Heutiges Datum: ${new Date().toISOString().split('T')[0]}, Wochentag heute: ${['So','Mo','Di','Mi','Do','Fr','Sa'][new Date().getDay()]}
 
 Wenn Leon nur quatscht oder fragt — antworte normal, OHNE actions Block.
 

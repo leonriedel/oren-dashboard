@@ -251,6 +251,10 @@ export default function Dashboard() {
         } else if (a.type === 'add_brain_dump' && a.text) {
           await supabase.from('brain_dump').insert({ user_id: user.id, text: a.text })
           results.push('Brain Dump: ' + a.text)
+        } else if (a.type === 'add_event' && a.title && a.start) {
+          const r = await fetch('/api/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: a.title, start: a.start, end: a.end, notes: a.notes }) })
+          const j = await r.json()
+          if (j.ok) { results.push('Termin: ' + a.title); setTimeout(() => window.location.reload(), 1000) } else { results.push('Termin-Fehler: ' + (j.error || 'unbekannt')) }
         }
       } catch (err) { results.push('Fehler bei ' + a.type) }
     }
