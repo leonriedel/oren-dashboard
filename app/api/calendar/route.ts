@@ -42,7 +42,7 @@ export async function GET() {
       const date = dateProp?.date?.start || null
       const dateEnd = dateProp?.date?.end || null
 
-      return { id: page.id, title, date, dateEnd }
+      const timeStr = date && date.includes("T") ? date.split("T")[1].slice(0,5) : ""; return { id: page.id, title, date, dateEnd, time: timeStr }
     }).filter((e: any) => e.date)
 
     return NextResponse.json({ events })

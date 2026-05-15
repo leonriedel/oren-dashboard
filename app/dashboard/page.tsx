@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
@@ -12,13 +12,24 @@ import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
 import SocialMedia from '@/components/modules/SocialMedia'
 import TalkToOren from '@/components/modules/TalkToOren'
-import GlobalParticles from '@/components/GlobalParticles'
+import HUDBackground from '@/components/HUDBackground'
+import HUDCore from '@/components/HUDCore'
 
 type Screen = 'home' | 'brain' | 'finance' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
 type CalEvent = { id: string; title: string; date?: string; time?: string }
+type Goal = { id: string; text: string; done: boolean }
+
+// ─── helper: extract time from ISO date string ─────────────────
+function getTimeFromEvent(e: CalEvent): string {
+  if (e.time && e.time.length > 0) return e.time
+  if (e.date && e.date.includes('T')) {
+    return e.date.split('T')[1].slice(0, 5)
+  }
+  return ''
+}
 
 export default function Dashboard() {
   const router = useRouter()
@@ -27,14 +38,10 @@ export default function Dashboard() {
   const [time, setTime] = useState({ bali: '', de: '', date: '', mode: '' })
   const [quickInput, setQuickInput] = useState('')
   const [orbState, setOrbState] = useState<OrbState>('idle')
-  const [listening, setListening] = useState(false)
   const [quickResponse, setQuickResponse] = useState<string>('')
-  const [quickActions, setQuickActions] = useState<string[]>([])
   const [priorities, setPriorities] = useState<Priority[]>([])
   const [events, setEvents] = useState<CalEvent[]>([])
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const orbBoxRef = useRef<HTMLDivElement>(null)
-  const recognitionRef = useRef<any>(null)
+  const [goals, setGoals] = useState<Goal[]>([])
 
   useEffect(() => {
     const supabase = createClient()
@@ -50,394 +57,549 @@ export default function Dashboard() {
     supabase.from('priorities').select('id, text, done').eq('user_id', user.id).eq('done', false).limit(5).then(({ data }: any) => {
       if (data) setPriorities(data)
     })
-    fetch('/api/calendar').then(r => r.json()).then(data => {
-      if (data && Array.isArray(data.events)) setEvents(data.events.slice(0, 5))
-    }).catch(() => {})
+    supabase.from('goals').select('id, text, done').eq('user_id', user.id).eq('done', false).limit(3).then(({ data }: any) => {
+      if (data) setGoals(data)
+    })
+    fetch('/api/calendar').then(r => r.json()).then(d => { if (d.events) setEvents(d.events) }).catch(() => {})
   }, [user])
 
   useEffect(() => {
     const tick = () => {
-      const now = new Date()
-      const bali = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }))
-      const de = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }))
+      const n = new Date()
+      const b = new Date(n.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }))
+      const d = new Date(n.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }))
       const days = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag']
-      const months = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
-      const fmt = (d: Date) => String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0')
-      const h = de.getHours()
+      const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+      const fmt = (x: Date) => String(x.getHours()).padStart(2,'0') + ':' + String(x.getMinutes()).padStart(2,'0') + ':' + String(x.getSeconds()).padStart(2,'0')
+      const h = d.getHours()
       const mode = h >= 22 || h < 6 ? 'NIGHT' : h < 12 ? 'MORNING' : h < 18 ? 'WORK' : 'EVENING'
-      setTime({ bali: fmt(bali), de: fmt(de), date: days[now.getDay()] + ', ' + now.getDate() + '. ' + months[now.getMonth()], mode })
+      setTime({
+        bali: fmt(b),
+        de: fmt(d),
+        date: days[n.getDay()] + ', ' + n.getDate() + '. ' + months[n.getMonth()] + ' ' + n.getFullYear(),
+        mode,
+      })
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [])
 
-  useEffect(() => {
-    if (screen !== 'home') return
-    const canvas = canvasRef.current
-    const box = orbBoxRef.current
-    if (!canvas || !box) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const dpr = window.devicePixelRatio || 1
-    const setSize = () => {
-      const rect = box.getBoundingClientRect()
-      canvas.width = Math.max(rect.width, 100) * dpr
-      canvas.height = Math.max(rect.height, 100) * dpr
-      canvas.style.width = rect.width + 'px'
-      canvas.style.height = rect.height + 'px'
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    }
-    setSize()
-    const ro = new ResizeObserver(setSize)
-    ro.observe(box)
-    window.addEventListener('resize', setSize)
-
-    const cx = () => canvas.width / dpr / 2
-    const cy = () => canvas.height / dpr / 2
-
-    type P = { angle: number; radius: number; speed: number; size: number; opacity: number; ringIndex: number; tilt: number }
-    const particles: P[] = []
-    for (let i = 0; i < 320; i++) {
-      const ringIndex = Math.floor(Math.random() * 5)
-      particles.push({
-        angle: Math.random() * Math.PI * 2,
-        radius: 110 + ringIndex * 35 + Math.random() * 28,
-        speed: (0.0008 + Math.random() * 0.0018) * (Math.random() > 0.5 ? 1 : -1),
-        size: Math.random() * 2 + 0.5,
-        opacity: Math.random() * 0.7 + 0.25,
-        ringIndex,
-        tilt: Math.random() * 0.5 + 0.45
-      })
-    }
-
-    let animId: number
-    let pulse = 0
-
-    const draw = () => {
-      const w = canvas.width / dpr
-      const h = canvas.height / dpr
-      ctx.clearRect(0, 0, w, h)
-      pulse += 0.018
-      const mult = orbState === 'thinking' ? 1.5 : orbState === 'speaking' ? 1.7 : orbState === 'listening' ? 2.0 : 1
-      const boost = orbState !== 'idle' ? 1 : 0
-
-      const orbR = 70 + Math.sin(pulse * 1.2) * 6 * mult
-
-      const halo = ctx.createRadialGradient(cx(), cy(), 0, cx(), cy(), orbR * 5)
-      halo.addColorStop(0, 'rgba(120, 180, 255, ' + (0.4 + boost * 0.15) + ')')
-      halo.addColorStop(0.25, 'rgba(80, 140, 240, ' + (0.2 + boost * 0.1) + ')')
-      halo.addColorStop(0.55, 'rgba(60, 100, 200, 0.06)')
-      halo.addColorStop(1, 'rgba(0,0,0,0)')
-      ctx.fillStyle = halo
-      ctx.beginPath()
-      ctx.arc(cx(), cy(), orbR * 5, 0, Math.PI * 2)
-      ctx.fill()
-
-      const core = ctx.createRadialGradient(cx() - orbR * 0.25, cy() - orbR * 0.25, 0, cx(), cy(), orbR)
-      core.addColorStop(0, 'rgba(230, 245, 255, ' + (0.95 + boost * 0.05) + ')')
-      core.addColorStop(0.4, 'rgba(120, 180, 255, ' + (0.7 + boost * 0.2) + ')')
-      core.addColorStop(0.8, 'rgba(60, 110, 220, 0.5)')
-      core.addColorStop(1, 'rgba(30, 60, 160, 0.15)')
-      ctx.fillStyle = core
-      ctx.beginPath()
-      ctx.arc(cx(), cy(), orbR, 0, Math.PI * 2)
-      ctx.fill()
-
-      ctx.fillStyle = 'rgba(255, 255, 255, ' + (0.5 + boost * 0.1) + ')'
-      ctx.beginPath()
-      ctx.arc(cx() - orbR * 0.3, cy() - orbR * 0.35, orbR * 0.2, 0, Math.PI * 2)
-      ctx.fill()
-
-      for (const p of particles) {
-        p.angle += p.speed * mult
-        const wobble = Math.sin(pulse * 0.6 + p.ringIndex) * 5
-        const r = p.radius + wobble
-        const x = cx() + Math.cos(p.angle) * r
-        const y = cy() + Math.sin(p.angle) * r * p.tilt
-
-        const a = p.opacity * (0.6 + Math.sin(pulse + p.angle) * 0.4) * (1 + boost * 0.3)
-        ctx.fillStyle = 'rgba(150, 200, 255, ' + Math.min(1, a) + ')'
-        ctx.beginPath()
-        ctx.arc(x, y, p.size * (1 + boost * 0.4), 0, Math.PI * 2)
-        ctx.fill()
-
-        if (p.size > 1.4) {
-          ctx.fillStyle = 'rgba(180, 220, 255, ' + a * 0.18 + ')'
-          ctx.beginPath()
-          ctx.arc(x, y, p.size * 4, 0, Math.PI * 2)
-          ctx.fill()
-        }
-      }
-
-      animId = requestAnimationFrame(draw)
-    }
-    draw()
-
-    return () => {
-      cancelAnimationFrame(animId)
-      ro.disconnect()
-      window.removeEventListener('resize', setSize)
-    }
-  }, [orbState, screen])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
-    const r = new SR()
-    r.lang = 'de-DE'
-    r.interimResults = false
-    r.continuous = false
-    r.onresult = (e: any) => {
-      const t = e.results[0][0].transcript
-      setQuickInput(t)
-      setListening(false)
-      setOrbState('idle')
-      setTimeout(() => sendQuick(t), 100)
-    }
-    r.onerror = () => { setListening(false); setOrbState('idle') }
-    r.onend = () => { setListening(false) }
-    recognitionRef.current = r
-  }, [])
-
-  function toggleListen() {
-    if (!recognitionRef.current) { alert('Voice nicht unterstuetzt. Nimm Chrome/Safari.'); return }
-    if (listening) { recognitionRef.current.stop(); setListening(false); setOrbState('idle') }
-    else { try { recognitionRef.current.start(); setListening(true); setOrbState('listening') } catch (e) { console.error(e) } }
-  }
-
-  function speak(text: string) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
-    const clean = text.replace(/```[\s\S]*?```/g, '').replace(/[*_#]/g, '').trim()
-    if (!clean) return
-    const u = new SpeechSynthesisUtterance(clean)
-    u.lang = 'de-DE'
-    const voices = window.speechSynthesis.getVoices()
-    const male = voices.find(v => v.lang.startsWith('de') && /eddy|reed|rocko|grandpa|markus|yannick/i.test(v.name)) || voices.find(v => v.lang.startsWith('de'))
-    if (male) u.voice = male
-    u.rate = 1.05
-    u.pitch = 0.95
-    u.onstart = () => setOrbState('speaking')
-    u.onend = () => setOrbState('idle')
-    window.speechSynthesis.speak(u)
-  }
-
-  async function executeActions(actions: any[]): Promise<string[]> {
-    if (!user) return []
-    const supabase = createClient()
-    const results: string[] = []
-    for (const a of actions) {
-      try {
-        if (a.type === 'add_priority' && a.text) {
-          await supabase.from('priorities').insert({ user_id: user.id, text: a.text, done: false })
-          results.push('Prio: ' + a.text)
-        } else if (a.type === 'add_goal' && a.text) {
-          await supabase.from('goals').insert({ user_id: user.id, text: a.text, done: false })
-          results.push('Goal: ' + a.text)
-        } else if (a.type === 'add_thinkspace' && a.text) {
-          await supabase.from('thinkspace').insert({ user_id: user.id, type: a.category || 'idea', text: a.text })
-          results.push('ThinkSpace: ' + a.text)
-        } else if (a.type === 'add_transaction' && a.description && a.amount) {
-          await supabase.from('transactions').insert({
-            user_id: user.id, type: a.kind || 'expense', description: a.description, amount: a.amount,
-            category: a.category || (a.kind === 'expense' ? 'private' : 'business'),
-            date: new Date().toISOString().split('T')[0]
-          })
-          results.push((a.kind === 'income' ? 'Einnahme' : 'Ausgabe') + ': ' + a.description + ' (' + a.amount + 'E)')
-        } else if (a.type === 'add_food_note' && a.text) {
-          await supabase.from('food_notes').insert({ user_id: user.id, text: a.text })
-          results.push('Ernaehrung: ' + a.text)
-        } else if (a.type === 'add_brain_dump' && a.text) {
-          await supabase.from('brain_dump').insert({ user_id: user.id, text: a.text })
-          results.push('Brain Dump: ' + a.text)
-        } else if (a.type === 'add_event' && a.title && a.start) {
-          const r = await fetch('/api/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: a.title, start: a.start, end: a.end, notes: a.notes }) })
-          const j = await r.json()
-          if (j.ok) { results.push('Termin: ' + a.title); setTimeout(() => window.location.reload(), 1000) } else { results.push('Termin-Fehler: ' + (j.error || 'unbekannt')) }
-        }
-      } catch (err) { results.push('Fehler bei ' + a.type) }
-    }
-    if (results.length > 0 && user) {
-      const supabase = createClient()
-      supabase.from('priorities').select('id, text, done').eq('user_id', user.id).eq('done', false).limit(5).then(({ data }: any) => {
-        if (data) setPriorities(data)
-      })
-    }
-    return results
-  }
-
-  async function sendQuick(text: string) {
-    if (!text.trim()) return
-    setQuickInput('')
+  const sendQuick = useCallback(async () => {
+    if (!quickInput.trim()) return
     setOrbState('thinking')
     setQuickResponse('')
-    setQuickActions([])
     try {
-      const res = await fetch('/api/chat', {
+      const r = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: text }] })
+        body: JSON.stringify({ messages: [{ role: 'user', content: quickInput }] }),
       })
-      const data = await res.json()
-      let executed: string[] = []
-      if (data.actions && data.actions.length > 0) executed = await executeActions(data.actions)
-      setQuickResponse(data.content)
-      setQuickActions(executed)
-      speak(data.content)
-    } catch (err) {
-      setQuickResponse('Fehler.')
+      const d = await r.json()
+      setQuickResponse(d.content || '...')
+      setOrbState('speaking')
+      setTimeout(() => setOrbState('idle'), 4500)
+    } catch {
       setOrbState('idle')
     }
-  }
+    setQuickInput('')
+  }, [quickInput])
 
-  const go = useCallback((s: Screen) => setScreen(s), [])
-  const handleLogout = async () => {
+  const logout = useCallback(async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.replace('/login')
-  }
+  }, [router])
 
-  if (!user) return <div style={{ height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#000' }}><div style={{ width:32, height:32, borderRadius:'50%', background:'radial-gradient(circle at 35% 35%, #00d4ff, #0044aa)' }} /></div>
+  if (!user) return null
 
-  const modules: { id: Screen; label: string; desc: string; icon: any }[] = [
-    { id:'brain', label:'SECONDBRAIN', desc:'Daily Command Center', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 3a3 3 0 00-3 3v1a3 3 0 00-3 3v3a3 3 0 003 3v1a3 3 0 003 3M15 3a3 3 0 013 3v1a3 3 0 013 3v3a3 3 0 01-3 3v1a3 3 0 01-3 3M9 8h6M9 16h6"/></svg>) },
-    { id:'finance', label:'FINANCES', desc:'Wealth & Liquidity', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a2.5 2.5 0 010 5H9"/></svg>) },
-    { id:'invest', label:'INVESTMENTS', desc:'Portfolio & Returns', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"/></svg>) },
-    { id:'news', label:'NEWS', desc:'Intel & Headlines', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>) },
-    { id:'think', label:'THINKSPACE', desc:'Strategy & Deep Thinking', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 18h6M10 22h4M12 2a7 7 0 00-4 12.7c.7.6 1 1.4 1 2.3h6c0-.9.3-1.7 1-2.3A7 7 0 0012 2z"/></svg>) },
-    { id:'sport', label:'SPORT', desc:'Body & Performance', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 6L3 9l3 3M18 12l3 3-3 3M9 18l-3 3M15 6l3-3M9 15L15 9"/></svg>) },
-    { id:'social', label:'SOCIAL MEDIA', desc:'Content & Growth', icon:(<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>) },
+  if (screen === 'brain')   return <SecondBrain  user={user} onBack={() => setScreen('home')} />
+  if (screen === 'finance') return <Finances     user={user} onBack={() => setScreen('home')} />
+  if (screen === 'invest')  return <Investments  user={user} onBack={() => setScreen('home')} />
+  if (screen === 'news')    return <News         user={user} onBack={() => setScreen('home')} />
+  if (screen === 'think')   return <ThinkSpace   user={user} onBack={() => setScreen('home')} />
+  if (screen === 'sport')   return <Sport        user={user} onBack={() => setScreen('home')} />
+  if (screen === 'social')  return <SocialMedia  user={user} onBack={() => setScreen('home')} />
+  if (screen === 'talk')    return <TalkToOren   user={user} onBack={() => setScreen('home')} />
+
+  const stateLabel = orbState === 'thinking' ? 'PROCESSING'
+                   : orbState === 'speaking' ? 'TRANSMITTING'
+                   : orbState === 'listening' ? 'LISTENING'
+                   : 'STANDBY'
+
+  const modules = [
+    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center' },
+    { id: 'finance', key: '02', label: 'FINANCES',    sub: 'Wealth & Liquidity' },
+    { id: 'invest',  key: '03', label: 'INVESTMENTS', sub: 'Portfolio & Returns' },
+    { id: 'news',    key: '04', label: 'NEWS',        sub: 'Intel & Headlines' },
+    { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think' },
+    { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance' },
+    { id: 'social',  key: '07', label: 'SOCIAL MEDIA', sub: 'Content & Growth' },
   ]
 
-  if (screen !== 'home') {
-    const props = { user, onBack: () => go('home') }
-    return (
-      <div style={{ minHeight:'100vh', background:'#000' }}>
-        {screen === 'talk' && <TalkToOren {...props} />}
-        {screen === 'brain' && <SecondBrain {...props} />}
-        {screen === 'finance' && <Finances {...props} />}
-        {screen === 'invest' && <Investments {...props} />}
-        {screen === 'news' && <News {...props} />}
-        {screen === 'think' && <ThinkSpace {...props} />}
-        {screen === 'sport' && <Sport {...props} />}
-        {screen === 'social' && <SocialMedia {...props} />}
-      </div>
-    )
-  }
-
-  const stateLabel = orbState === 'thinking' ? 'PROCESSING' : orbState === 'speaking' ? 'SPEAKING' : orbState === 'listening' ? 'LISTENING' : 'STANDBY'
+  // System status — Leon, OREN, Edgar
+  const systems = [
+    { name: 'LEON',  status: 'ONLINE', uptime: 100, color: '#34d399' },
+    { name: 'OREN',  status: 'ACTIVE', uptime: 99,  color: '#34d399' },
+    { name: 'EDGAR', status: 'STANDBY', uptime: 80, color: '#fbbf24' },
+  ]
 
   return (
     <>
-      <GlobalParticles active={orbState !== 'idle'} />
-    <div style={{ minHeight:'100vh', background:'radial-gradient(ellipse at center, #0a1530 0%, #050810 60%, #000 100%)', color:'#e0e8ff', fontFamily:'DM Sans, system-ui, sans-serif', position:'relative', overflow:'hidden' }}>
-      {/* Top bar */}
-      <div style={{ position:'absolute', top:20, left:0, right:0, display:'flex', justifyContent:'space-between', padding:'0 28px', fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:3, color:'#5a7ab5', zIndex:5 }}>
-        <div>{time.mode} · {time.date}</div>
-        <div style={{ textAlign:'right' }}>BALI {time.bali}<br/>DE&nbsp;&nbsp;&nbsp;{time.de}</div>
-      </div>
+      <HUDBackground />
 
-      {/* Main 3-column grid */}
-      <div className="oren-grid" style={{ minHeight:'100vh', display:'grid', gridTemplateColumns:'minmax(260px, 320px) 1fr minmax(260px, 320px)', gap:24, padding:'80px 28px 40px', maxWidth:1600, margin:'0 auto' }}>
+      <div style={{
+        minHeight: '100vh',
+        background: 'radial-gradient(ellipse at center, #051022 0%, #020610 60%, #000 100%)',
+        color: '#bfdbfe',
+        fontFamily: 'DM Sans, system-ui, sans-serif',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.4,
+          backgroundImage: `linear-gradient(rgba(80,180,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(80,180,255,0.035) 1px, transparent 1px)`,
+          backgroundSize: '48px 48px',
+        }} />
 
-        {/* LEFT — Today */}
-        <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
-          <div style={{ background:'rgba(15,25,50,0.4)', border:'1px solid rgba(120,180,255,0.15)', borderRadius:14, padding:'18px 20px', backdropFilter:'blur(12px)' }}>
-            <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:2.5, color:'#5a7ab5', marginBottom:14 }}>TODAY · TERMINE</div>
-            {events.length === 0 ? (
-              <div style={{ fontSize:12, color:'#5a7ab5', fontStyle:'italic' }}>Keine Termine.</div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {events.map(e => (
-                  <div key={e.id} style={{ display:'flex', gap:12, alignItems:'flex-start' }}>
-                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, color:'#a0c0ff', minWidth:48, paddingTop:2 }}>{e.time || (e.date ? new Date(e.date).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) : '')}</div>
-                    <div style={{ fontSize:13, color:'#dde7ff', lineHeight:1.4 }}>{e.title}</div>
+        <CornerBracket pos="tl" />
+        <CornerBracket pos="tr" />
+        <CornerBracket pos="bl" />
+        <CornerBracket pos="br" />
+
+        {/* ═══ TOP BAR ═══ */}
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0,
+          padding: '14px 56px 14px 28px',
+          display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+          gap: 24, alignItems: 'center', zIndex: 20,
+          fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5,
+          color: '#7ea6d5',
+          backdropFilter: 'blur(12px)',
+          background: 'linear-gradient(180deg, rgba(0,8,24,0.9) 0%, rgba(0,8,24,0) 100%)',
+          borderBottom: '1px solid rgba(80,180,255,0.10)',
+        }}>
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <PulseDot color="#34d399" />
+              <span style={{ color: '#a0d0ff' }}>SYS ONLINE</span>
+            </div>
+            <span style={{ opacity: 0.55 }}>OREN v4.0</span>
+            <span style={{ opacity: 0.55 }}>{time.mode}</span>
+            <span style={{ color: '#7ea6d5' }}>{time.date}</span>
+          </div>
+          <div style={{
+            textAlign: 'center', color: '#80c0ff', fontSize: 12, letterSpacing: 6, fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
+          }}>
+            <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
+            <span>WILLKOMMEN LEON RIEDEL</span>
+            <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
+          </div>
+          <div style={{ textAlign: 'right', display: 'flex', gap: 24, justifyContent: 'flex-end', alignItems: 'center' }}>
+            <TimeDisplay label="BALI" value={time.bali} />
+            <TimeDisplay label="BERLIN" value={time.de} />
+            <button onClick={logout} style={btnExit}>EXIT</button>
+          </div>
+        </div>
+
+        {/* ═══ MAIN GRID ═══ */}
+        <div style={{
+          paddingTop: 64,
+          paddingBottom: 24,
+          paddingLeft: 24,
+          paddingRight: 24,
+          display: 'grid',
+          gridTemplateColumns: '300px 1fr 320px',
+          gap: 18,
+          minHeight: '100vh',
+          position: 'relative',
+          zIndex: 5,
+        }}>
+
+          {/* LEFT */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <HUDPanel title="◉ TERMINE" subtitle={events.length ? `${String(events.length).padStart(2,'0')} TODAY` : '00'}>
+              {events.length === 0 ? (
+                <Empty text="Keine Termine heute" />
+              ) : (
+                events.slice(0, 8).map((e, i) => (
+                  <DataRow key={e.id || i} idx={getTimeFromEvent(e) || '--:--'} text={e.title} idxColor="#80c0ff" />
+                ))
+              )}
+            </HUDPanel>
+
+            <HUDPanel title="◈ PRIORITIES" subtitle={`${String(priorities.length).padStart(2,'0')} OPEN`}>
+              {priorities.length === 0 ? (
+                <Empty text="Sag OREN was wichtig ist" />
+              ) : (
+                priorities.map((p, i) => (
+                  <DataRow key={p.id} idx={String(i + 1).padStart(2, '0')} text={p.text} idxColor="#ffd060" />
+                ))
+              )}
+              <button onClick={() => setScreen('brain')} style={btnSecondary}>OPEN SECONDBRAIN →</button>
+            </HUDPanel>
+
+            <HUDPanel title="▲ GOALS" subtitle="WEEKLY">
+              {goals.length === 0 ? (
+                <Empty text="Keine Goals diese Woche" />
+              ) : (
+                goals.map((g, i) => (
+                  <div key={g.id} style={{
+                    display: 'flex', gap: 10, padding: '7px 0',
+                    borderBottom: i < goals.length - 1 ? '1px solid rgba(80,180,255,0.05)' : 'none',
+                    alignItems: 'flex-start',
+                  }}>
+                    <div style={{
+                      width: 12, height: 12, borderRadius: 2,
+                      border: '1px solid rgba(80,220,180,0.5)',
+                      flexShrink: 0, marginTop: 1,
+                    }} />
+                    <div style={{ fontSize: 11.5, color: '#c5e0ff', lineHeight: 1.4 }}>{g.text}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </HUDPanel>
 
-          <div style={{ background:'rgba(15,25,50,0.4)', border:'1px solid rgba(120,180,255,0.15)', borderRadius:14, padding:'18px 20px', backdropFilter:'blur(12px)' }}>
-            <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:2.5, color:'#5a7ab5', marginBottom:14 }}>TOP PRIORITIES</div>
-            {priorities.length === 0 ? (
-              <div style={{ fontSize:12, color:'#5a7ab5', fontStyle:'italic' }}>Keine Prios. Sag Oren was wichtig ist.</div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                {priorities.map((p, i) => (
-                  <div key={p.id} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-                    <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, color:'#a0c0ff', minWidth:18, paddingTop:2 }}>0{i+1}</div>
-                    <div style={{ fontSize:13, color:'#dde7ff', lineHeight:1.4 }}>{p.text}</div>
+            {/* SYSTEM STATUS panel — Leon / OREN / Edgar */}
+            <HUDPanel title="◇ SYSTEMS" subtitle="LIVE STATUS">
+              {systems.map((s, i) => (
+                <div key={s.name} style={{
+                  padding: '10px 0',
+                  borderBottom: i < systems.length - 1 ? '1px solid rgba(80,180,255,0.05)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <PulseDot color={s.color} />
+                      <span style={{
+                        fontFamily: 'Space Mono, monospace', fontSize: 10.5, fontWeight: 700,
+                        color: '#d0e5ff', letterSpacing: 2,
+                      }}>{s.name}</span>
+                    </div>
+                    <span style={{
+                      fontFamily: 'Space Mono, monospace', fontSize: 9,
+                      color: s.color, letterSpacing: 1.5,
+                    }}>{s.status}</span>
                   </div>
-                ))}
-              </div>
-            )}
-            <button onClick={() => go('brain')} style={{ marginTop:14, background:'transparent', border:'1px solid rgba(120,180,255,0.25)', color:'#a0c0ff', padding:'7px 12px', borderRadius:999, fontSize:10, cursor:'pointer', fontFamily:'Space Mono, monospace', letterSpacing:1.5, width:'100%' }}>OPEN SECONDBRAIN</button>
+                  <div style={{
+                    width: '100%', height: 5, background: 'rgba(80,180,255,0.06)',
+                    borderRadius: 1, overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${s.uptime}%`, height: '100%',
+                      background: `linear-gradient(90deg, ${s.color}, ${s.color}aa)`,
+                      boxShadow: `0 0 8px ${s.color}`,
+                      transition: 'width 1s ease',
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </HUDPanel>
           </div>
-        </div>
 
-        {/* CENTER — Orb */}
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-start', gap:24 }}>
-          <div ref={orbBoxRef} style={{ position:'relative', width:'100%', height:'520px', maxWidth:'600px' }}>
-            <canvas ref={canvasRef} style={{ position:'absolute', top:0, left:0, pointerEvents:'none' }} />
-            <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, calc(-50% + 110px))', textAlign:'center', pointerEvents:'none' }}>
-              <h1 style={{ fontFamily:'Space Mono, monospace', fontSize:32, fontWeight:700, color:'#a0c8ff', letterSpacing:8, margin:0, textShadow:'0 0 30px rgba(120,180,255,0.5)' }}>OREN</h1>
-              <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:5, color:'#5a7ab5', marginTop:10 }}>{stateLabel}</div>
+          {/* CENTER */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'flex-start', paddingTop: 0, position: 'relative',
+          }}>
+
+            <div style={{ display: 'flex', gap: 7, marginBottom: 8, fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 1.5 }}>
+              <StatusPill label="CORE" value="OPS" color="#34d399" />
+              <StatusPill label="API" value="LIVE" color="#34d399" />
+              <StatusPill label="MEM" value="OK" color="#34d399" />
+              <StatusPill label="CRON" value="ARMED" color="#fbbf24" />
+              <StatusPill label="NEURAL" value="SYNC" color="#80c0ff" />
+            </div>
+
+            <div style={{ position: 'relative', width: 540, height: 540, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <HUDCore orbState={orbState} size={540} />
+
+              <div style={{
+                position: 'absolute', top: 18, left: 16,
+                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
+                color: 'rgba(120,180,230,0.6)', pointerEvents: 'none',
+              }}>
+                <div style={{ color: '#80c0ff' }}>◇ ID-OREN-001</div>
+                <div style={{ opacity: 0.6, marginTop: 2 }}>NEURAL CORE</div>
+              </div>
+              <div style={{
+                position: 'absolute', top: 18, right: 16,
+                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
+                color: 'rgba(120,180,230,0.6)', textAlign: 'right', pointerEvents: 'none',
+              }}>
+                <div style={{ color: '#34d399' }}>● OPERATIONAL</div>
+                <div style={{ opacity: 0.6, marginTop: 2 }}>{stateLabel}</div>
+              </div>
+              <div style={{
+                position: 'absolute', bottom: 14, left: 16,
+                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
+                color: 'rgba(120,180,230,0.6)', pointerEvents: 'none',
+              }}>
+                <div>LAT 8.7°S</div>
+                <div style={{ marginTop: 2 }}>LON 115.2°E</div>
+              </div>
+              <div style={{
+                position: 'absolute', bottom: 14, right: 16,
+                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
+                color: 'rgba(120,180,230,0.6)', textAlign: 'right', pointerEvents: 'none',
+              }}>
+                <div>FREQ 440.0Hz</div>
+                <div style={{ marginTop: 2 }}>AMP 0.85</div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: -8, marginBottom: 20 }}>
+              <div style={{
+                fontFamily: 'Space Mono, monospace', fontSize: 28, fontWeight: 700,
+                letterSpacing: 16, color: 'rgba(220,240,255,0.98)',
+                textShadow: '0 0 35px rgba(120,200,255,0.7), 0 0 70px rgba(80,160,255,0.4)',
+                paddingLeft: 16,
+              }}>OREN</div>
+              <div style={{
+                fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 6,
+                color: 'rgba(120,180,230,0.65)', marginTop: 4,
+              }}>● {stateLabel}</div>
+            </div>
+
+            <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{
+                display: 'flex', gap: 6, alignItems: 'center',
+                background: 'rgba(8,20,48,0.7)',
+                border: '1px solid rgba(80,180,255,0.30)',
+                borderRadius: 4, padding: '8px 8px 8px 18px',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 0 28px rgba(60,140,255,0.18), inset 0 0 0 1px rgba(80,180,255,0.05)',
+              }}>
+                <span style={{ color: 'rgba(120,200,255,0.7)', fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2 }}>›</span>
+                <input
+                  value={quickInput}
+                  onChange={e => setQuickInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') sendQuick() }}
+                  placeholder="INPUT COMMAND..."
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                    color: '#d8eaff', fontSize: 13, fontFamily: 'Space Mono, monospace', letterSpacing: 0.5,
+                  }}
+                />
+                <button onClick={() => setScreen('talk')} title="Full chat" style={iconBtn}>⛶</button>
+                <button onClick={sendQuick} style={{ ...iconBtn, background: 'rgba(80,180,255,0.30)', borderColor: 'rgba(120,200,255,0.7)', color: '#fff' }}>→</button>
+              </div>
+              {quickResponse && (
+                <div style={{
+                  background: 'rgba(8,20,48,0.78)',
+                  border: '1px solid rgba(80,180,255,0.25)',
+                  borderLeft: '2px solid rgba(120,200,255,0.75)',
+                  borderRadius: 4, padding: '12px 14px',
+                  fontSize: 12.5, color: '#d0e5ff', lineHeight: 1.55,
+                  fontFamily: 'DM Sans, system-ui, sans-serif',
+                  backdropFilter: 'blur(8px)',
+                }}>{quickResponse}</div>
+              )}
             </div>
           </div>
 
-          <div style={{ width:'100%', maxWidth:560 }}>
-            <div style={{ display:'flex', gap:8, padding:8, background:'rgba(15,25,50,0.85)', border:'1px solid rgba(120,180,255,0.3)', borderRadius:999, backdropFilter:'blur(24px)', boxShadow:'0 12px 60px rgba(0,40,100,0.5)' }}>
-              <input value={quickInput} onChange={e => setQuickInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendQuick(quickInput) }} placeholder={listening ? 'Listening...' : 'Sprich mit Oren...'} style={{ flex:1, background:'transparent', border:'none', outline:'none', color:'#e0e8ff', fontSize:15, padding:'10px 16px', fontFamily:'inherit' }} />
-              <button onClick={toggleListen} style={{ background:listening?'rgba(255,100,100,0.25)':'rgba(120,180,255,0.15)', border:listening?'1px solid rgba(255,100,100,0.5)':'1px solid rgba(120,180,255,0.3)', color:listening?'#ff8080':'#a0c0ff', width:42, height:42, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0014 0v-2M12 19v3"/></svg>
-              </button>
-              <button onClick={() => sendQuick(quickInput)} disabled={!quickInput.trim()} style={{ background:!quickInput.trim()?'rgba(120,180,255,0.1)':'linear-gradient(135deg, #6090ff, #a060ff)', border:'none', color:'#fff', width:42, height:42, borderRadius:'50%', cursor:!quickInput.trim()?'not-allowed':'pointer', opacity:!quickInput.trim()?0.4:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-              </button>
+          {/* RIGHT */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{
+              fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 2.5,
+              color: '#5a80b5', padding: '4px 2px', display: 'flex',
+              justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <span>◇ MODULES</span>
+              <span style={{ color: '#34d399' }}>● 7/7 ACTIVE</span>
             </div>
 
-            {quickResponse && (
-              <div style={{ marginTop:14, padding:'14px 18px', background:'rgba(20,30,60,0.6)', border:'1px solid rgba(120,180,255,0.2)', borderRadius:16, backdropFilter:'blur(20px)', fontSize:14, lineHeight:1.6, whiteSpace:'pre-wrap' }}>
-                {quickResponse}
-                {quickActions.length > 0 && (<div style={{ marginTop:10, paddingTop:10, borderTop:'1px solid rgba(120,180,255,0.2)', fontSize:12, color:'#7dd3a0', fontFamily:'Space Mono, monospace' }}>{quickActions.map((a, j) => <div key={j}>{a}</div>)}</div>)}
-                <button onClick={() => go('talk')} style={{ marginTop:12, background:'transparent', border:'1px solid rgba(120,180,255,0.3)', color:'#a0c0ff', padding:'6px 12px', borderRadius:999, fontSize:11, cursor:'pointer', fontFamily:'Space Mono, monospace', letterSpacing:1.5 }}>OPEN FULL CHAT</button>
-              </div>
-            )}
+            {modules.map(m => (
+              <HexButton key={m.id} onClick={() => setScreen(m.id as Screen)} k={m.key} label={m.label} sub={m.sub} />
+            ))}
+
+            <HUDPanel title="◇ TELEMETRY" subtitle="LIVE">
+              <Tele label="HEARTBEAT" value="30M" />
+              <Tele label="MODEL" value="HAIKU 4.5" />
+              <Tele label="LATENCY" value="42MS" green />
+              <Tele label="UPTIME" value="99.4%" green />
+              <Tele label="TOKENS" value="2.4K" />
+            </HUDPanel>
           </div>
-        </div>
-
-        {/* RIGHT — Modules */}
-        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-          <div style={{ fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:2.5, color:'#5a7ab5', padding:'0 4px 4px' }}>MODULES</div>
-          {modules.map(mod => (
-            <div key={mod.id} onClick={() => go(mod.id)} style={{ background:'rgba(20,30,60,0.45)', border:'1px solid rgba(120,180,255,0.15)', borderRadius:12, padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', gap:12, backdropFilter:'blur(12px)', transition:'all 0.2s' }} onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,180,255,0.5)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(30,45,85,0.6)' }} onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(120,180,255,0.15)'; (e.currentTarget as HTMLDivElement).style.background = 'rgba(20,30,60,0.45)' }}>
-              <div style={{ width:34, height:34, borderRadius:9, background:'rgba(120,180,255,0.08)', border:'1px solid rgba(120,180,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center', color:'#a0c0ff', flexShrink:0 }}>{mod.icon}</div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontFamily:'Space Mono, monospace', fontSize:11, fontWeight:700, letterSpacing:1.8, color:'#dde7ff' }}>{mod.label}</div>
-                <div style={{ fontSize:10, color:'#7a9fdc', marginTop:2, letterSpacing:0.3 }}>{mod.desc}</div>
-              </div>
-              <div style={{ color:'#5a7ab5', fontSize:14 }}>›</div>
-            </div>
-          ))}
-          <button onClick={handleLogout} style={{ marginTop:12, background:'transparent', border:'none', color:'#5a7ab5', fontFamily:'Space Mono, monospace', fontSize:10, letterSpacing:2.5, cursor:'pointer', padding:'10px', alignSelf:'center' }}>LOGOUT</button>
         </div>
       </div>
-
-      <style>{`
-        @media (max-width: 1100px) {
-          .oren-grid { grid-template-columns: 1fr !important; gap: 20px !important; padding: 70px 20px 40px !important; }
-          .oren-grid > div:nth-child(1) { order: 2; }
-          .oren-grid > div:nth-child(2) { order: 1; }
-          .oren-grid > div:nth-child(3) { order: 3; }
-        }
-        @media (max-width: 600px) {
-          .oren-grid { padding: 60px 14px 30px !important; }
-        }
-      `}</style>
-    </div>
     </>
   )
 }
+
+// ─── helpers ────────────────────────────────────────────────────
+
+function HUDPanel({ title, subtitle, children }: any) {
+  return (
+    <div style={{
+      background: 'linear-gradient(180deg, rgba(8,20,48,0.6) 0%, rgba(8,20,48,0.4) 100%)',
+      border: '1px solid rgba(80,180,255,0.16)',
+      borderRadius: 4, padding: 12,
+      backdropFilter: 'blur(10px)',
+      position: 'relative',
+      boxShadow: 'inset 0 1px 0 rgba(120,200,255,0.06)',
+    }}>
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+        background: 'linear-gradient(90deg, transparent, rgba(120,200,255,0.55), transparent)',
+      }} />
+      <div style={{ position: 'absolute', top: 3, left: 3, width: 6, height: 6, borderTop: '1px solid rgba(120,200,255,0.45)', borderLeft: '1px solid rgba(120,200,255,0.45)' }} />
+      <div style={{ position: 'absolute', top: 3, right: 3, width: 6, height: 6, borderTop: '1px solid rgba(120,200,255,0.45)', borderRight: '1px solid rgba(120,200,255,0.45)' }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2, color: '#80c0ff', fontWeight: 700 }}>{title}</div>
+        <div style={{
+          fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 1.5,
+          color: 'rgba(120,180,230,0.55)', padding: '1px 6px',
+          border: '1px solid rgba(80,180,255,0.18)', borderRadius: 2,
+        }}>{subtitle}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function DataRow({ idx, text, idxColor = '#80c0ff' }: any) {
+  return (
+    <div style={{
+      display: 'flex', gap: 10, padding: '7px 0',
+      borderBottom: '1px solid rgba(80,180,255,0.05)',
+      alignItems: 'flex-start',
+    }}>
+      <div style={{
+        fontFamily: 'Space Mono, monospace', fontSize: 10,
+        color: idxColor, minWidth: 38, paddingTop: 1, fontWeight: 700, letterSpacing: 0.5,
+      }}>{idx}</div>
+      <div style={{ fontSize: 11.5, color: '#d0e5ff', lineHeight: 1.4 }}>{text}</div>
+    </div>
+  )
+}
+
+function Empty({ text }: { text: string }) {
+  return <div style={{ fontSize: 11, color: 'rgba(120,180,230,0.4)', fontStyle: 'italic', padding: '4px 0' }}>{text}</div>
+}
+
+function PulseDot({ color }: { color: string }) {
+  return <div style={{ width: 5, height: 5, borderRadius: 50, background: color, boxShadow: `0 0 10px ${color}` }} />
+}
+
+function StatusPill({ label, value, color }: any) {
+  return (
+    <div style={{
+      padding: '3px 9px', borderRadius: 2,
+      background: hexA(color, 0.08),
+      border: `1px solid ${hexA(color, 0.25)}`,
+      display: 'flex', gap: 5, alignItems: 'center',
+    }}>
+      <div style={{ width: 4, height: 4, borderRadius: 50, background: color, boxShadow: `0 0 5px ${color}` }} />
+      <span style={{ color: 'rgba(160,210,255,0.55)' }}>{label}</span>
+      <span style={{ color }}>{value}</span>
+    </div>
+  )
+}
+
+function TimeDisplay({ label, value }: any) {
+  return (
+    <div>
+      <div style={{ fontSize: 8, opacity: 0.5, lineHeight: 1, letterSpacing: 1.5 }}>{label}</div>
+      <div style={{ color: '#a0d0ff', fontSize: 12.5, fontWeight: 700, fontFamily: 'Space Mono, monospace', letterSpacing: 0.5 }}>{value}</div>
+    </div>
+  )
+}
+
+function Tele({ label, value, green }: any) {
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'space-between',
+      padding: '5px 0',
+      borderBottom: '1px solid rgba(80,180,255,0.05)',
+      fontFamily: 'Space Mono, monospace', fontSize: 9.5,
+    }}>
+      <span style={{ color: 'rgba(120,180,230,0.5)', letterSpacing: 1 }}>{label}</span>
+      <span style={{ color: green ? '#34d399' : '#a0d0ff', letterSpacing: 1 }}>{value}</span>
+    </div>
+  )
+}
+
+function HexButton({ k, label, sub, onClick }: any) {
+  return (
+    <button onClick={onClick}
+      onMouseEnter={(e: any) => {
+        e.currentTarget.style.borderColor = 'rgba(120,200,255,0.45)'
+        e.currentTarget.style.background = 'rgba(20,40,80,0.8)'
+        e.currentTarget.style.transform = 'translateX(-3px)'
+      }}
+      onMouseLeave={(e: any) => {
+        e.currentTarget.style.borderColor = 'rgba(80,180,255,0.15)'
+        e.currentTarget.style.background = 'rgba(8,20,48,0.55)'
+        e.currentTarget.style.transform = 'translateX(0)'
+      }}
+      style={{
+        background: 'rgba(8,20,48,0.55)',
+        border: '1px solid rgba(80,180,255,0.15)',
+        borderLeft: '2px solid rgba(120,200,255,0.5)',
+        borderRadius: 2, padding: '11px 14px',
+        cursor: 'pointer', width: '100%', textAlign: 'left',
+        transition: 'all 0.2s ease',
+        backdropFilter: 'blur(8px)', position: 'relative',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: '#80c0ff', opacity: 0.7, fontWeight: 700, minWidth: 18 }}>{k}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11.5, letterSpacing: 2.5, fontWeight: 700, color: '#bfdbfe' }}>{label}</div>
+          <div style={{ fontSize: 9.5, color: 'rgba(150,190,230,0.55)', marginTop: 1, letterSpacing: 0.5 }}>{sub}</div>
+        </div>
+        <div style={{ color: '#80c0ff', fontSize: 13, opacity: 0.5 }}>›</div>
+      </div>
+    </button>
+  )
+}
+
+function CornerBracket({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
+  const s = 28, t = 16
+  const styles: any = {
+    tl: { top: t, left: t, borderLeft: '1px solid #80c0ff', borderTop: '1px solid #80c0ff' },
+    tr: { top: t, right: t, borderRight: '1px solid #80c0ff', borderTop: '1px solid #80c0ff' },
+    bl: { bottom: t, left: t, borderLeft: '1px solid #80c0ff', borderBottom: '1px solid #80c0ff' },
+    br: { bottom: t, right: t, borderRight: '1px solid #80c0ff', borderBottom: '1px solid #80c0ff' },
+  }
+  return <div style={{ position: 'fixed', width: s, height: s, zIndex: 30, opacity: 0.35, pointerEvents: 'none', ...styles[pos] }} />
+}
+
+function hexA(hex: string, alpha: number) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+const iconBtn = {
+  width: 32, height: 32, borderRadius: 2,
+  background: 'rgba(20,40,80,0.55)',
+  border: '1px solid rgba(80,180,255,0.28)',
+  color: 'rgba(160,210,255,0.8)',
+  cursor: 'pointer', fontSize: 13,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  flexShrink: 0,
+} as const
+
+const btnSecondary = {
+  marginTop: 10, width: '100%',
+  padding: '7px 12px',
+  background: 'rgba(20,40,80,0.4)',
+  border: '1px solid rgba(80,180,255,0.22)',
+  borderRadius: 2,
+  color: 'rgba(160,210,255,0.78)',
+  fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: 2,
+  cursor: 'pointer',
+} as const
+
+const btnExit = {
+  background: 'rgba(255,80,80,0.05)',
+  border: '1px solid rgba(255,80,80,0.18)',
+  color: 'rgba(255,120,120,0.7)',
+  padding: '6px 14px',
+  borderRadius: 2,
+  cursor: 'pointer',
+  fontFamily: 'Space Mono, monospace',
+  fontSize: 9,
+  letterSpacing: 2,
+} as const

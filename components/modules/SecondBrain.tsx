@@ -70,34 +70,28 @@ export default function SecondBrain({ user, onBack }: Props) {
     if (data) setPrios(prev => [...prev, data])
     setNewPrio('')
   }
-
   async function togglePrio(id: string, done: boolean) {
     await supabase.from('priorities').update({ done: !done }).eq('id', id)
     setPrios(prev => prev.map(p => p.id === id ? { ...p, done: !done } : p))
   }
-
   async function deletePrio(id: string) {
     await supabase.from('priorities').delete().eq('id', id)
     setPrios(prev => prev.filter(p => p.id !== id))
   }
-
   async function addGoal() {
     if (!newGoal.trim()) return
     const { data } = await supabase.from('goals').insert({ user_id: user.id, text: newGoal.trim(), done: false }).select().single()
     if (data) setGoals(prev => [...prev, data])
     setNewGoal('')
   }
-
   async function toggleGoal(id: string, done: boolean) {
     await supabase.from('goals').update({ done: !done }).eq('id', id)
     setGoals(prev => prev.map(g => g.id === id ? { ...g, done: !done } : g))
   }
-
   async function deleteGoal(id: string) {
     await supabase.from('goals').delete().eq('id', id)
     setGoals(prev => prev.filter(g => g.id !== id))
   }
-
   async function toggleNN(id: string, done: boolean) {
     await supabase.from('non_negotiables').update({ done: !done }).eq('id', id)
     setNn(prev => prev.map(n => n.id === id ? { ...n, done: !done } : n))
@@ -113,140 +107,213 @@ export default function SecondBrain({ user, onBack }: Props) {
   const recs = ['Deep Work Block: Ablenkungen minimieren.','Top Prio zuerst — alles andere ist zweitrangig.','Energie hoch? Jetzt die härteste Aufgabe.','Review: Was hat heute funktioniert?','Wochenende nutzen: Planen, reflektieren, aufladen.']
   const rec = recs[new Date().getDay() % recs.length]
 
-  const todayEvents = events.filter(e => {
-    const d = new Date(e.date)
-    const today = new Date()
-    return d.toDateString() === today.toDateString()
-  })
-  const upcomingEvents = events.filter(e => {
-    const d = new Date(e.date)
-    const today = new Date()
-    return d.toDateString() !== today.toDateString()
-  })
+  const todayEvents = events.filter(e => new Date(e.date).toDateString() === new Date().toDateString())
+  const upcomingEvents = events.filter(e => new Date(e.date).toDateString() !== new Date().toDateString())
 
   return (
-    <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor="#00aadd" sub="Daily Operations & Execution" iconBg="linear-gradient(135deg, #005577, #0088bb)">
-      {/* Mission */}
-      <div style={{ background:'linear-gradient(135deg, rgba(0,212,255,0.05), rgba(0,68,170,0.1))', border:'1px solid rgba(0,212,255,0.15)', borderRadius:16, padding:20, marginBottom:12 }}>
-        <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--muted2)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ width:8, height:8, borderRadius:'50%', background:'var(--cyan)', display:'inline-block' }} />
-          MISSION HEUTE
-        </div>
-        <div style={{ fontSize:18, fontWeight:600, lineHeight:1.4, marginBottom:14 }}>System aufbauen. Prozesse automatisieren. Fokus halten.</div>
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          {[['var(--amber)','ENERGIE: Hoch'],['var(--cyan)','FOKUS: Deep Work'],['var(--green)','MODUS: Builder']].map(([c,l]) => (
-            <div key={l} style={{ fontSize:11, padding:'4px 12px', borderRadius:20, background:`rgba(255,255,255,0.05)`, color:c, fontFamily:'var(--mono)', display:'flex', alignItems:'center', gap:6 }}>
-              <span style={{ width:6, height:6, borderRadius:'50%', background:c as string, display:'inline-block' }} />{l}
-            </div>
-          ))}
-        </div>
-      </div>
+    <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor="#80c0ff" sub="Daily Operations & Execution" iconBg="linear-gradient(135deg, rgba(60,120,200,0.4), rgba(100,180,255,0.2))">
 
-      {/* Momentum */}
-      <Card>
-        <SectionTitle color="var(--cyan)">MOMENTUM</SectionTitle>
-        <div style={{ height:6, background:'var(--bg3)', borderRadius:3, overflow:'hidden', marginBottom:12 }}>
-          <div style={{ height:'100%', width:`${pct}%`, background:'linear-gradient(90deg, var(--cyan2), var(--cyan))', borderRadius:3, transition:'width 0.6s ease' }} />
-        </div>
-        <div style={{ display:'flex', gap:24 }}>
-          {[['TAG', pct+'%'],['PRIOS', prios.length ? Math.round(donePrios/prios.length*100)+'%' : '0%'],['GOALS', goals.length ? Math.round(doneGoals/goals.length*100)+'%' : '0%']].map(([l,v]) => (
-            <div key={l} style={{ fontFamily:'var(--mono)', fontSize:12 }}>
-              <span style={{ color:'var(--cyan)', fontWeight:700 }}>{v}</span>{' '}
-              <span style={{ color:'var(--muted)', fontSize:10 }}>{l}</span>
+      {/* MISSION BANNER FULL WIDTH */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(80,160,255,0.06), rgba(40,100,200,0.10))',
+        border: '1px solid rgba(80,180,255,0.20)',
+        borderLeft: '2px solid #80c0ff',
+        borderRadius: 4, padding: 24, marginBottom: 18, position: 'relative',
+      }}>
+        <div style={{ position: 'absolute', top: 3, left: 3, width: 8, height: 8, borderTop: '1px solid rgba(120,200,255,0.5)', borderLeft: '1px solid rgba(120,200,255,0.5)' }} />
+        <div style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderTop: '1px solid rgba(120,200,255,0.5)', borderRight: '1px solid rgba(120,200,255,0.5)' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 3, color: '#80c0ff', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#80c0ff', boxShadow: '0 0 8px #80c0ff' }} />
+              MISSION HEUTE
             </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Oren rec */}
-      <div style={{ display:'flex', gap:10, padding:14, background:'var(--card2)', borderRadius:12, marginBottom:12, border:'1px solid var(--border)' }}>
-        <span style={{ fontSize:18 }}>🤖</span>
-        <div>
-          <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--cyan)', marginBottom:5 }}>OREN EMPFIEHLT</div>
-          <div style={{ fontSize:13, color:'var(--muted2)', lineHeight:1.5 }}>{rec}</div>
-        </div>
-      </div>
-
-      {/* TAGESPLAN — Notion Calendar */}
-      <Card>
-        <SectionTitle color="var(--cyan)" action={<span style={{ fontFamily:'var(--mono)', fontSize:10, color:'var(--muted2)' }}>{new Date().toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit'})}</span>}>
-          TAGESPLAN
-        </SectionTitle>
-        {eventsLoading ? (
-          <div style={{ color:'var(--muted)', fontSize:13, padding:'8px 0' }}>Lade Kalender...</div>
-        ) : todayEvents.length === 0 ? (
-          <div style={{ color:'var(--muted)', fontSize:13, padding:'8px 0' }}>Keine Termine heute</div>
-        ) : (
-          todayEvents.map(e => (
-            <div key={e.id} style={{ display:'flex', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
-              <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--cyan)', minWidth:40, marginTop:2 }}>
-                {formatEventTime(e.date) || '📅'}
-              </div>
-              <div style={{ flex:1, fontSize:14 }}>{e.title}</div>
+            <div style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.4, marginBottom: 14, color: '#e0eeff' }}>
+              System aufbauen. Prozesse automatisieren. Fokus halten.
             </div>
-          ))
-        )}
-        {upcomingEvents.length > 0 && (
-          <>
-            <div style={{ fontFamily:'var(--mono)', fontSize:10, letterSpacing:2, color:'var(--muted)', margin:'14px 0 8px', textTransform:'uppercase' }}>THIS WEEK</div>
-            {upcomingEvents.slice(0,5).map(e => (
-              <div key={e.id} style={{ display:'flex', gap:12, padding:'10px 0', borderBottom:'1px solid var(--border)', alignItems:'flex-start' }}>
-                <div style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--muted2)', minWidth:60, marginTop:2 }}>
-                  {formatEventDate(e.date)}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[['#fbbf24','ENERGIE: Hoch'],['#80c0ff','FOKUS: Deep Work'],['#34d399','MODUS: Builder']].map(([c,l]) => (
+                <div key={l} style={{
+                  fontSize: 11, padding: '5px 13px', borderRadius: 2,
+                  background: `${c}15`, color: c as string,
+                  border: `1px solid ${c}30`,
+                  fontFamily: 'Space Mono, monospace', letterSpacing: 1.5,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: c as string, boxShadow: `0 0 6px ${c}` }} />
+                  {l}
                 </div>
-                <div style={{ flex:1, fontSize:14 }}>{e.title}</div>
-              </div>
-            ))}
-          </>
-        )}
-      </Card>
+              ))}
+            </div>
+          </div>
 
-      {/* Top Prio */}
-      <Card>
-        <SectionTitle color="var(--red)">TOP PRIO</SectionTitle>
-        {!prios.length && <div style={{ color:'var(--muted)', fontSize:13, textAlign:'center', padding:'8px 0' }}>Keine Prioritäten — hinzufügen ↓</div>}
-        {prios.map(p => (
-          <ItemRow key={p.id}>
-            <div onClick={() => togglePrio(p.id, p.done)} style={{ width:20, height:20, borderRadius:'50%', border:`1.5px solid ${p.done ? 'var(--green)' : 'var(--border2)'}`, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, background:p.done?'var(--green)':'transparent', flexShrink:0 }}>{p.done ? '✓' : ''}</div>
-            <div style={{ flex:1, fontSize:14, textDecoration:p.done?'line-through':'none', color:p.done?'var(--muted)':'var(--text)' }}>{p.text}</div>
-            <div onClick={() => deletePrio(p.id)} style={{ cursor:'pointer', color:'var(--muted)', fontSize:18, padding:'0 4px' }}>×</div>
-          </ItemRow>
-        ))}
-        <div style={{ display:'flex', gap:10, marginTop:12 }}>
-          <input value={newPrio} onChange={e => setNewPrio(e.target.value)} onKeyDown={e => e.key==='Enter'&&addPrio()} placeholder="Aufgabe hinzufügen..." style={{ flex:1, background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none' }} />
-          <button onClick={addPrio} style={{ width:38, height:38, borderRadius:'50%', background:'var(--cyan2)', border:'none', cursor:'pointer', color:'white', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+          {/* Momentum gauge inline */}
+          <div style={{ minWidth: 220 }}>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 3, color: 'rgba(120,180,230,0.55)', marginBottom: 8 }}>MOMENTUM</div>
+            <div style={{ height: 8, background: 'rgba(80,180,255,0.08)', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+              <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #60a5fa, #80c0ff)', boxShadow: '0 0 12px #80c0ff', transition: 'width 0.6s ease' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 18, fontFamily: 'Space Mono, monospace', fontSize: 11 }}>
+              <div><span style={{ color: '#80c0ff', fontWeight: 700 }}>{pct}%</span> <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 9 }}>TAG</span></div>
+              <div><span style={{ color: '#80c0ff', fontWeight: 700 }}>{prios.length ? Math.round(donePrios/prios.length*100) : 0}%</span> <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 9 }}>PRIOS</span></div>
+              <div><span style={{ color: '#80c0ff', fontWeight: 700 }}>{goals.length ? Math.round(doneGoals/goals.length*100) : 0}%</span> <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 9 }}>GOALS</span></div>
+            </div>
+          </div>
         </div>
-      </Card>
+      </div>
 
-      {/* Non-Negotiables */}
-      <Card>
-        <SectionTitle color="var(--amber)" action={<span style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--muted2)' }}>{doneNN}/{nn.length}</span>}>NON-NEGOTIABLES</SectionTitle>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8 }}>
+      {/* OREN RECOMMENDATION FULL WIDTH */}
+      <div style={{
+        display: 'flex', gap: 14, padding: '14px 18px',
+        background: 'rgba(8,20,48,0.55)',
+        border: '1px solid rgba(80,180,255,0.18)',
+        borderLeft: '2px solid #34d399',
+        borderRadius: 4, marginBottom: 18, alignItems: 'center',
+      }}>
+        <span style={{ fontSize: 20 }}>🤖</span>
+        <div>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5, color: '#34d399', marginBottom: 4 }}>OREN EMPFIEHLT</div>
+          <div style={{ fontSize: 14, color: '#d0e5ff', lineHeight: 1.4 }}>{rec}</div>
+        </div>
+      </div>
+
+      {/* 3-COLUMN GRID */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 18 }}>
+
+        {/* COL 1 — TAGESPLAN */}
+        <Card>
+          <SectionTitle color="#80c0ff" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.55)' }}>{new Date().toLocaleTimeString('de',{hour:'2-digit',minute:'2-digit'})}</span>}>
+            TAGESPLAN
+          </SectionTitle>
+          {eventsLoading ? (
+            <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13 }}>Lade Kalender...</div>
+          ) : todayEvents.length === 0 ? (
+            <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13 }}>Keine Termine heute</div>
+          ) : (
+            todayEvents.map(e => (
+              <div key={e.id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(80,180,255,0.06)', alignItems: 'flex-start' }}>
+                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, color: '#80c0ff', minWidth: 44, marginTop: 1, letterSpacing: 0.5 }}>
+                  {formatEventTime(e.date) || '--:--'}
+                </div>
+                <div style={{ flex: 1, fontSize: 13, color: '#d0e5ff', lineHeight: 1.4 }}>{e.title}</div>
+              </div>
+            ))
+          )}
+          {upcomingEvents.length > 0 && (
+            <>
+              <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5, color: 'rgba(120,180,230,0.5)', margin: '16px 0 8px' }}>UPCOMING</div>
+              {upcomingEvents.slice(0,6).map(e => (
+                <div key={e.id} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid rgba(80,180,255,0.05)', alignItems: 'flex-start' }}>
+                  <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.6)', minWidth: 60, marginTop: 1 }}>{formatEventDate(e.date)}</div>
+                  <div style={{ flex: 1, fontSize: 12.5, color: '#c5e0ff' }}>{e.title}</div>
+                </div>
+              ))}
+            </>
+          )}
+        </Card>
+
+        {/* COL 2 — PRIOS */}
+        <Card>
+          <SectionTitle color="#fbbf24" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.55)' }}>{donePrios}/{prios.length}</span>}>
+            TOP PRIO
+          </SectionTitle>
+          {!prios.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>Keine Prioritäten</div>}
+          {prios.map(p => (
+            <ItemRow key={p.id}>
+              <div onClick={() => togglePrio(p.id, p.done)} style={{
+                width: 18, height: 18, borderRadius: 2,
+                border: `1px solid ${p.done ? '#34d399' : 'rgba(80,180,255,0.35)'}`,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, background: p.done ? 'rgba(52,211,153,0.2)' : 'transparent',
+                color: '#34d399', flexShrink: 0,
+              }}>{p.done ? '✓' : ''}</div>
+              <div style={{ flex: 1, fontSize: 13, textDecoration: p.done ? 'line-through' : 'none', color: p.done ? 'rgba(120,180,230,0.5)' : '#d0e5ff', lineHeight: 1.4 }}>{p.text}</div>
+              <div onClick={() => deletePrio(p.id)} style={{ cursor: 'pointer', color: 'rgba(120,180,230,0.4)', fontSize: 16, padding: '0 4px' }}>×</div>
+            </ItemRow>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <input value={newPrio} onChange={e => setNewPrio(e.target.value)} onKeyDown={e => e.key==='Enter'&&addPrio()} placeholder="Aufgabe..." style={inputStyle} />
+            <button onClick={addPrio} style={plusBtn}>+</button>
+          </div>
+        </Card>
+
+        {/* COL 3 — GOALS */}
+        <Card>
+          <SectionTitle color="#34d399" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.55)' }}>{doneGoals}/{goals.length}</span>}>
+            WEEKLY GOALS
+          </SectionTitle>
+          {!goals.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>Keine Goals</div>}
+          {goals.map(g => (
+            <ItemRow key={g.id}>
+              <div onClick={() => toggleGoal(g.id, g.done)} style={{
+                width: 18, height: 18, borderRadius: 2,
+                border: `1px solid ${g.done ? '#34d399' : 'rgba(80,180,255,0.35)'}`,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, background: g.done ? 'rgba(52,211,153,0.2)' : 'transparent',
+                color: '#34d399', flexShrink: 0,
+              }}>{g.done ? '✓' : ''}</div>
+              <div style={{ flex: 1, fontSize: 13, textDecoration: g.done ? 'line-through' : 'none', color: g.done ? 'rgba(120,180,230,0.5)' : '#d0e5ff', lineHeight: 1.4 }}>{g.text}</div>
+              <div onClick={() => deleteGoal(g.id)} style={{ cursor: 'pointer', color: 'rgba(120,180,230,0.4)', fontSize: 16, padding: '0 4px' }}>×</div>
+            </ItemRow>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <input value={newGoal} onChange={e => setNewGoal(e.target.value)} onKeyDown={e => e.key==='Enter'&&addGoal()} placeholder="Goal..." style={inputStyle} />
+            <button onClick={addGoal} style={plusBtn}>+</button>
+          </div>
+        </Card>
+      </div>
+
+      {/* NON-NEGOTIABLES FULL WIDTH */}
+      <Card style={{ marginTop: 18 }}>
+        <SectionTitle color="#fbbf24" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, color: 'rgba(120,180,230,0.55)' }}>{doneNN}/{nn.length}</span>}>
+          NON-NEGOTIABLES
+        </SectionTitle>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
           {nn.map(n => (
-            <div key={n.id} onClick={() => toggleNN(n.id, n.done)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 6px', borderRadius:12, border:`1px solid ${n.done ? 'rgba(0,212,255,0.4)' : 'var(--border)'}`, background:n.done ? 'rgba(0,212,255,0.08)' : 'var(--card2)', cursor:'pointer', transition:'all 0.2s' }}>
-              <span style={{ fontSize:22 }}>{n.emoji}</span>
-              <span style={{ fontSize:9, letterSpacing:1, color:'var(--muted)', textTransform:'uppercase', textAlign:'center' }}>{n.label}</span>
+            <div key={n.id} onClick={() => toggleNN(n.id, n.done)} style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+              padding: '18px 8px', borderRadius: 3,
+              border: `1px solid ${n.done ? 'rgba(52,211,153,0.45)' : 'rgba(80,180,255,0.14)'}`,
+              background: n.done ? 'rgba(52,211,153,0.10)' : 'rgba(8,20,48,0.45)',
+              cursor: 'pointer', transition: 'all 0.2s ease',
+              boxShadow: n.done ? '0 0 18px rgba(52,211,153,0.20)' : 'none',
+            }}>
+              <span style={{ fontSize: 26 }}>{n.emoji}</span>
+              <span style={{
+                fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+                color: n.done ? '#34d399' : 'rgba(120,180,230,0.6)', textAlign: 'center', fontWeight: 700,
+              }}>{n.label}</span>
             </div>
           ))}
         </div>
       </Card>
 
-      {/* Weekly Goals */}
-      <Card>
-        <SectionTitle color="var(--green)">WEEKLY GOALS</SectionTitle>
-        {!goals.length && <div style={{ color:'var(--muted)', fontSize:13, textAlign:'center', padding:'8px 0' }}>Keine Goals — hinzufügen ↓</div>}
-        {goals.map(g => (
-          <ItemRow key={g.id}>
-            <div onClick={() => toggleGoal(g.id, g.done)} style={{ width:20, height:20, borderRadius:'50%', border:`1.5px solid ${g.done?'var(--green)':'var(--border2)'}`, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, background:g.done?'var(--green)':'transparent', flexShrink:0 }}>{g.done?'✓':''}</div>
-            <div style={{ flex:1, fontSize:14, textDecoration:g.done?'line-through':'none', color:g.done?'var(--muted)':'var(--text)' }}>{g.text}</div>
-            <div onClick={() => deleteGoal(g.id)} style={{ cursor:'pointer', color:'var(--muted)', fontSize:18, padding:'0 4px' }}>×</div>
-          </ItemRow>
-        ))}
-        <div style={{ display:'flex', gap:10, marginTop:12 }}>
-          <input value={newGoal} onChange={e => setNewGoal(e.target.value)} onKeyDown={e => e.key==='Enter'&&addGoal()} placeholder="Goal hinzufügen..." style={{ flex:1, background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none' }} />
-          <button onClick={addGoal} style={{ width:38, height:38, borderRadius:'50%', background:'var(--cyan2)', border:'none', cursor:'pointer', color:'white', fontSize:20, display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
-        </div>
-      </Card>
     </ModuleLayout>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  flex: 1,
+  background: 'rgba(8,20,48,0.7)',
+  border: '1px solid rgba(80,180,255,0.20)',
+  borderRadius: 3,
+  padding: '9px 12px',
+  color: '#d8eaff',
+  fontSize: 12.5,
+  outline: 'none',
+  fontFamily: 'DM Sans, system-ui, sans-serif',
+}
+
+const plusBtn: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  borderRadius: 3,
+  background: 'rgba(80,180,255,0.25)',
+  border: '1px solid rgba(120,200,255,0.45)',
+  cursor: 'pointer',
+  color: '#fff',
+  fontSize: 18,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 }

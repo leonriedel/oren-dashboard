@@ -13,6 +13,8 @@ export default function Finances({ user, onBack }: Props) {
   const [transactions, setTransactions] = useState<any[]>([])
   const [showAdd, setShowAdd] = useState<'expense'|'income'|null>(null)
   const [form, setForm] = useState({ desc: '', amount: '', category: 'business' })
+  const [editMode, setEditMode] = useState(false)
+  const [editForm, setEditForm] = useState({ biz_assets: '', priv_liquidity: '', avail_cash: '' })
 
   useEffect(() => { load() }, [])
 
@@ -23,11 +25,30 @@ export default function Finances({ user, onBack }: Props) {
     ])
     if (snap.data) setSnapshot(snap.data)
     else {
-      // seed initial snapshot
       const { data } = await supabase.from('finance_snapshot').insert({ user_id: user.id, biz_assets: 1500000, priv_liquidity: 4800, avail_cash: 2800 }).select().single()
       if (data) setSnapshot(data)
     }
     setTransactions(txs.data || [])
+  }
+
+  async function saveWealthEdit() {
+    const updated = {
+      biz_assets: parseFloat(editForm.biz_assets) || snapshot.biz_assets,
+      priv_liquidity: parseFloat(editForm.priv_liquidity) || snapshot.priv_liquidity,
+      avail_cash: parseFloat(editForm.avail_cash) || snapshot.avail_cash,
+    }
+    await supabase.from('finance_snapshot').update(updated).eq('user_id', user.id)
+    setSnapshot({ ...snapshot, ...updated })
+    setEditMode(false)
+  }
+
+  function startEdit() {
+    setEditForm({
+      biz_assets: String(snapshot.biz_assets),
+      priv_liquidity: String(snapshot.priv_liquidity),
+      avail_cash: String(snapshot.avail_cash),
+    })
+    setEditMode(true)
   }
 
   async function addTransaction() {
@@ -56,75 +77,180 @@ export default function Finances({ user, onBack }: Props) {
   const total = snapshot.biz_assets + snapshot.priv_liquidity + snapshot.avail_cash
 
   function fmt(n: number) {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M €'
+    if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M €'
     if (n >= 1000) return (n / 1000).toFixed(1) + 'K €'
     return n.toFixed(0) + ' €'
   }
 
   const months = ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember']
 
-  return (
-    <ModuleLayout onBack={onBack} icon="💰" title="FINANCES" titleColor="var(--green)" sub="Wealth & Liquidity" iconBg="linear-gradient(135deg, #1a5c2a, #2d9e48)">
-      <Card>
-        <SectionTitle color="var(--green)">FINANCIAL SNAPSHOT</SectionTitle>
-        <div style={{ textAlign:'center', padding:'8px 0 20px' }}>
-          <div style={{ fontSize:11, letterSpacing:3, color:'var(--muted)', textTransform:'uppercase', marginBottom:8 }}>TOTAL WEALTH</div>
-          <div style={{ fontFamily:'var(--mono)', fontSize:40, fontWeight:700, color:'var(--green)' }}>{fmt(total)}</div>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-          {[['BUSINESS',snapshot.biz_assets],['LIQUIDITY',snapshot.priv_liquidity],['CASH',snapshot.avail_cash]].map(([l,v]) => (
-            <div key={l} style={{ background:'rgba(0,230,118,0.06)', border:'1px solid rgba(0,230,118,0.15)', borderRadius:12, padding:'14px 10px', textAlign:'center' }}>
-              <div style={{ fontSize:10, letterSpacing:2, color:'rgba(0,230,118,0.6)', textTransform:'uppercase', marginBottom:8 }}>{l}</div>
-              <div style={{ fontFamily:'var(--mono)', fontSize:15, color:'var(--green)', fontWeight:700 }}>{fmt(Number(v))}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
+  const editBtn = (
+    <button onClick={() => editMode ? saveWealthEdit() : startEdit()} style={{
+      padding: '6px 14px',
+      background: editMode ? 'rgba(52,211,153,0.20)' : 'rgba(80,180,255,0.12)',
+      border: `1px solid ${editMode ? 'rgba(52,211,153,0.5)' : 'rgba(80,180,255,0.30)'}`,
+      borderRadius: 3,
+      color: editMode ? '#34d399' : '#80c0ff',
+      fontFamily: 'Space Mono, monospace',
+      fontSize: 9.5, letterSpacing: 2,
+      cursor: 'pointer',
+    }}>
+      {editMode ? '✓ SAVE' : '✎ EDIT'}
+    </button>
+  )
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-        <button onClick={() => setShowAdd('expense')} style={{ padding:13, borderRadius:12, border:'1px solid rgba(255,68,68,0.3)', background:'rgba(255,68,68,0.08)', color:'#ff6666', fontFamily:'var(--mono)', fontSize:11, letterSpacing:1.5, cursor:'pointer' }}>+ ADD EXPENSE</button>
-        <button onClick={() => setShowAdd('income')} style={{ padding:13, borderRadius:12, border:'1px solid rgba(0,230,118,0.3)', background:'rgba(0,230,118,0.08)', color:'var(--green)', fontFamily:'var(--mono)', fontSize:11, letterSpacing:1.5, cursor:'pointer' }}>+ ADD INCOME</button>
+  return (
+    <ModuleLayout onBack={onBack} icon="💰" title="FINANCES" titleColor="#34d399" sub="Wealth & Liquidity" iconBg="linear-gradient(135deg, rgba(52,211,153,0.4), rgba(20,140,90,0.2))" rightAction={editBtn}>
+
+      {/* TOTAL WEALTH HERO */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(52,211,153,0.06), rgba(20,140,90,0.10))',
+        border: '1px solid rgba(52,211,153,0.20)',
+        borderLeft: '2px solid #34d399',
+        borderRadius: 4, padding: 28, marginBottom: 18, position: 'relative',
+      }}>
+        <div style={{ position: 'absolute', top: 3, left: 3, width: 8, height: 8, borderTop: '1px solid rgba(52,211,153,0.5)', borderLeft: '1px solid rgba(52,211,153,0.5)' }} />
+        <div style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderTop: '1px solid rgba(52,211,153,0.5)', borderRight: '1px solid rgba(52,211,153,0.5)' }} />
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 36, alignItems: 'center' }}>
+          {/* Total */}
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 3, color: 'rgba(120,180,230,0.6)', textTransform: 'uppercase', marginBottom: 10 }}>TOTAL WEALTH</div>
+            <div style={{
+              fontFamily: 'Space Mono, monospace', fontSize: 48, fontWeight: 700, color: '#34d399',
+              textShadow: '0 0 30px rgba(52,211,153,0.5)', letterSpacing: 1,
+            }}>{fmt(total)}</div>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.5)', marginTop: 6 }}>{total.toLocaleString('de-DE')} €</div>
+          </div>
+
+          {/* Breakdown */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+            {[
+              { label: 'BUSINESS', val: snapshot.biz_assets, key: 'biz_assets' },
+              { label: 'LIQUIDITY', val: snapshot.priv_liquidity, key: 'priv_liquidity' },
+              { label: 'CASH', val: snapshot.avail_cash, key: 'avail_cash' },
+            ].map(b => (
+              <div key={b.key} style={{
+                background: 'rgba(8,20,48,0.65)',
+                border: '1px solid rgba(52,211,153,0.18)',
+                borderLeft: '2px solid #34d399',
+                borderRadius: 3, padding: '18px 14px', textAlign: 'center',
+              }}>
+                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 2, color: 'rgba(120,180,230,0.55)', textTransform: 'uppercase', marginBottom: 10 }}>{b.label}</div>
+                {editMode ? (
+                  <input
+                    type="number"
+                    value={editForm[b.key as keyof typeof editForm]}
+                    onChange={e => setEditForm(p => ({ ...p, [b.key]: e.target.value }))}
+                    style={{
+                      width: '100%', background: 'rgba(8,20,48,0.7)',
+                      border: '1px solid rgba(52,211,153,0.4)', borderRadius: 3,
+                      padding: '6px 8px', color: '#34d399',
+                      fontFamily: 'Space Mono, monospace', fontSize: 14, fontWeight: 700,
+                      textAlign: 'center', outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 18, color: '#34d399', fontWeight: 700, letterSpacing: 0.5 }}>{fmt(b.val)}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ADD BUTTONS */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+        <button onClick={() => setShowAdd('expense')} style={{
+          padding: 14, borderRadius: 3,
+          border: '1px solid rgba(248,113,113,0.30)',
+          borderLeft: '2px solid #f87171',
+          background: 'rgba(248,113,113,0.06)',
+          color: '#f87171',
+          fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2, cursor: 'pointer',
+        }}>+ ADD EXPENSE</button>
+        <button onClick={() => setShowAdd('income')} style={{
+          padding: 14, borderRadius: 3,
+          border: '1px solid rgba(52,211,153,0.30)',
+          borderLeft: '2px solid #34d399',
+          background: 'rgba(52,211,153,0.06)',
+          color: '#34d399',
+          fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2, cursor: 'pointer',
+        }}>+ ADD INCOME</button>
       </div>
 
       {showAdd && (
-        <Card style={{ border:'1px solid var(--border2)', marginBottom:12 }}>
-          <div style={{ fontFamily:'var(--mono)', fontSize:12, color:showAdd==='income'?'var(--green)':'var(--red)', marginBottom:12 }}>{showAdd === 'income' ? 'INCOME HINZUFÜGEN' : 'EXPENSE HINZUFÜGEN'}</div>
-          <input placeholder="Beschreibung" value={form.desc} onChange={e => setForm(p => ({...p, desc:e.target.value}))} style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none', marginBottom:8 }} />
-          <input placeholder="Betrag (€)" type="number" value={form.amount} onChange={e => setForm(p => ({...p, amount:e.target.value}))} style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none', marginBottom:8 }} />
-          {showAdd === 'income' && (
-            <select value={form.category} onChange={e => setForm(p => ({...p, category:e.target.value}))} style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none', marginBottom:8 }}>
-              <option value="business">Business Income</option>
-              <option value="private">Private Income</option>
-            </select>
-          )}
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={() => setShowAdd(null)} style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>ABBRECHEN</button>
-            <button onClick={addTransaction} style={{ flex:1, padding:10, borderRadius:10, border:'none', background: showAdd==='income'?'var(--green)':'var(--red)', color:'white', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SPEICHERN</button>
+        <Card style={{ marginBottom: 18 }}>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2, color: showAdd === 'income' ? '#34d399' : '#f87171', marginBottom: 14 }}>
+            {showAdd === 'income' ? '+ INCOME HINZUFÜGEN' : '+ EXPENSE HINZUFÜGEN'}
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'center' }}>
+            <input placeholder="Beschreibung" value={form.desc} onChange={e => setForm(p => ({...p, desc: e.target.value}))} style={inputStyle} />
+            <input placeholder="Betrag (€)" type="number" value={form.amount} onChange={e => setForm(p => ({...p, amount: e.target.value}))} style={inputStyle} />
+            {showAdd === 'income' && (
+              <select value={form.category} onChange={e => setForm(p => ({...p, category: e.target.value}))} style={{ ...inputStyle, gridColumn: '1 / span 2' }}>
+                <option value="business">Business Income</option>
+                <option value="private">Private Income</option>
+              </select>
+            )}
+            <button onClick={addTransaction} style={{
+              padding: '10px 18px', borderRadius: 3,
+              border: 'none',
+              background: showAdd === 'income' ? '#34d399' : '#f87171',
+              color: 'white', fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2,
+              cursor: 'pointer',
+            }}>SAVE</button>
+          </div>
+          <button onClick={() => setShowAdd(null)} style={{
+            marginTop: 10, padding: '8px 14px', borderRadius: 3,
+            border: '1px solid rgba(80,180,255,0.20)',
+            background: 'transparent', color: 'rgba(120,180,230,0.6)',
+            fontFamily: 'Space Mono, monospace', fontSize: 9.5, letterSpacing: 2, cursor: 'pointer',
+          }}>ABBRECHEN</button>
         </Card>
       )}
 
-      <Card>
-        <SectionTitle color="var(--cyan)">MONTHLY OVERVIEW — {months[now.getMonth()].toUpperCase()} {now.getFullYear()}</SectionTitle>
-        <MetricGrid items={[
-          { label:'INCOME', value: monthIncome.toFixed(0)+' €', color:'var(--green)' },
-          { label:'EXPENSES', value: monthExpenses.toFixed(0)+' €', color:'var(--red)' },
-          { label:'NET FLOW', value: (netFlow >= 0 ? '+' : '')+netFlow.toFixed(0)+' €', color: netFlow >= 0 ? 'var(--cyan)' : 'var(--red)' },
-        ]} />
-      </Card>
+      {/* 2 COLUMN: OVERVIEW + RECENT */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+        <Card>
+          <SectionTitle color="#80c0ff">MONTHLY OVERVIEW · {months[now.getMonth()].toUpperCase()} {now.getFullYear()}</SectionTitle>
+          <MetricGrid items={[
+            { label:'INCOME', value: monthIncome.toFixed(0)+' €', color:'#34d399' },
+            { label:'EXPENSES', value: monthExpenses.toFixed(0)+' €', color:'#f87171' },
+            { label:'NET FLOW', value: (netFlow >= 0 ? '+' : '')+netFlow.toFixed(0)+' €', color: netFlow >= 0 ? '#80c0ff' : '#f87171' },
+          ]} />
+          <div style={{ marginTop: 16, padding: '12px 0', borderTop: '1px solid rgba(80,180,255,0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: 'Space Mono, monospace', fontSize: 11 }}>
+              <span style={{ color: 'rgba(120,180,230,0.55)', letterSpacing: 1 }}>YEARLY EST.</span>
+              <span style={{ color: '#34d399', letterSpacing: 1 }}>{(netFlow * 12).toLocaleString('de-DE')} €</span>
+            </div>
+          </div>
+        </Card>
 
-      <Card>
-        <SectionTitle color="var(--amber)">RECENT TRANSACTIONS</SectionTitle>
-        {!transactions.length && <div style={{ color:'var(--muted)', fontSize:13 }}>Keine Transaktionen</div>}
-        {transactions.slice(0,10).map(t => (
-          <ItemRow key={t.id}>
-            <span style={{ fontSize:13, flex:1 }}>{t.description}</span>
-            <span style={{ fontFamily:'var(--mono)', fontSize:12, color: t.type==='income' ? 'var(--green)' : 'var(--red)' }}>
-              {t.type==='income' ? '+' : '-'}{Number(t.amount).toFixed(2)} €
-            </span>
-          </ItemRow>
-        ))}
-      </Card>
+        <Card>
+          <SectionTitle color="#fbbf24">RECENT TRANSACTIONS</SectionTitle>
+          {!transactions.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>Keine Transaktionen</div>}
+          {transactions.slice(0,8).map(t => (
+            <ItemRow key={t.id}>
+              <span style={{ fontSize: 13, flex: 1, color: '#d0e5ff' }}>{t.description}</span>
+              <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, color: t.type === 'income' ? '#34d399' : '#f87171', letterSpacing: 0.5 }}>
+                {t.type === 'income' ? '+' : '-'}{Number(t.amount).toFixed(2)} €
+              </span>
+            </ItemRow>
+          ))}
+        </Card>
+      </div>
     </ModuleLayout>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  background: 'rgba(8,20,48,0.7)',
+  border: '1px solid rgba(80,180,255,0.20)',
+  borderRadius: 3,
+  padding: '10px 12px',
+  color: '#d8eaff',
+  fontSize: 12.5,
+  outline: 'none',
+  fontFamily: 'DM Sans, system-ui, sans-serif',
 }
