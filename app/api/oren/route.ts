@@ -1,98 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-const NOTION_TOKEN = process.env.NOTION_TOKEN
-const DATABASE_ID = '0db5af1e64c54d418d3c832e87f26097'
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPABASE_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const OREN_PIN = process.env.OREN_ACCESS_PIN!
+const LEON_USER_ID = '453d97b5-1e01-48c5-9f0b-8345039b3dca'
 
-export async function GET(req: NextRequest) {
-  try {
-    const today = new Date()
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
-    const endOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7).toISOString()
-
-    const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        filter: {
-          and: [
-            { property: 'Datum', date: { on_or_after: startOfDay } },
-            { property: 'Datum', date: { before: endOfWeek } }
-          ]
-        },
-        sorts: [{ property: 'Datum', direction: 'ascending' }],
-        page_size: 20,
-      })
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('Notion API error:', err)
-      return NextResponse.json({ events: [], error: err }, { status: 200 })
-    }
-
-    const data = await res.json()
-
-    const events = data.results.map((page: any) => {
-      const props = page.properties
-      const titleProp = Object.values(props).find((p: any) => p.type === 'title') as any
-      const title = titleProp?.title?.[0]?.plain_text || 'Kein Titel'
-      const dateProp = Object.values(props).find((p: any) => p.type === 'date') as any
-      const date = dateProp?.date?.start || null
-      const dateEnd = dateProp?.date?.end || null
-      return { id: page.id, title, date, dateEnd }
-    }).filter((e: any) => e.date)
-
-    return NextResponse.json({ events })
-  } catch (error) {
-    console.error('Calendar API error:', error)
-    return NextResponse.json({ events: [], error: String(error) }, { status: 200 })
-  }
+// Whitelist: only these tables + fields can be written by OREN
+const SCHEMA: Record<string, string[]> = {
+  thinkspace:    ['type', 'text'],
+  priorities:    ['text', 'done'],
+  goals:         ['text', 'done'],
+  food_notes:    ['text'],
+  brain_dump:    ['text'],
+  investments:   ['category', 'name', 'invested', 'current_value'],
+  content_items: ['type', 'text', 'is_today', 'pipeline_status'],
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { title, start, end, notes } = await req.json()
+function checkAuth(req: NextRequest) {
+  return req.headers.get('x-api-key') === OREN_PIN
+}
 
-    if (!title || !start) {
-      return NextResponse.json({ error: 'title und start erforderlich' }, { status: 400 })
-    }
+function sb() {
+  return createClient(SUPABASE_URL, SUPABASE_SECRET)
+}
 
-    const properties: any = {
-      Titel: { title: [{ text: { content: title } }] },
-      Datum: { date: { start, end: end || null } }
-    }
-
-    if (notes) {
-      properties.Notizen = { rich_text: [{ text: { content: notes } }] }
-    }
-
-    const res = await fetch('https://api.notion.com/v1/pages', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        parent: { database_id: DATABASE_ID },
-        properties
-      })
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('Notion POST error:', err)
-      return NextResponse.json({ error: err }, { status: 500 })
-    }
-
-    const data = await res.json()
-    return NextResponse.json({ ok: true, id: data.id, title, start, end })
-  } catch (error) {
-    console.error('Calendar POST error:', error)
-    return NextResponse.json({ error: String(error) }, { status: 500 })
+// GET /api/oren?table=thinkspace  → list rows
+export async function GET(req: NextRequest) {
+  if (!checkAuth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const table = req.nextUrl.searchParams.get('table')
+  if (!table || !SCHEMA[table]) {
+    return NextResponse.json({ error: 'invalid table', allowed: Object.keys(SCHEMA) }, { status: 400 })
   }
+  const { data, error } = await sb()
+    .from(table)
+    .select('*')
+    .eq('user_id', LEON_USER_ID)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ table, count: data?.length || 0, rows: data })
+}
+
+// POST /api/oren  body: { table, fields:{...} }  → insert row
+export async function POST(req: NextRequest) {
+  if (!checkAuth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  let body: any
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
+
+  const { table, fields } = body
+  if (!table || !SCHEMA[table]) {
+    return NextResponse.json({ error: 'invalid table', allowed: Object.keys(SCHEMA) }, { status: 400 })
+  }
+  if (!fields || typeof fields !== 'object') {
+    return NextResponse.json({ error: 'fields object required', schema: SCHEMA[table] }, { status: 400 })
+  }
+
+  // only allow whitelisted fields
+  const clean: Record<string, any> = { user_id: LEON_USER_ID }
+  for (const key of SCHEMA[table]) {
+    if (key in fields) clean[key] = fields[key]
+  }
+  if (Object.keys(clean).length === 1) {
+    return NextResponse.json({ error: 'no valid fields', schema: SCHEMA[table] }, { status: 400 })
+  }
+
+  const { data, error } = await sb().from(table).insert(clean).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, table, inserted: data })
+}
+
+// PATCH /api/oren  body: { table, id, fields:{...} }  → update row
+export async function PATCH(req: NextRequest) {
+  if (!checkAuth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  let body: any
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
+
+  const { table, id, fields } = body
+  if (!table || !SCHEMA[table]) {
+    return NextResponse.json({ error: 'invalid table', allowed: Object.keys(SCHEMA) }, { status: 400 })
+  }
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const clean: Record<string, any> = {}
+  for (const key of SCHEMA[table]) {
+    if (fields && key in fields) clean[key] = fields[key]
+  }
+  const { data, error } = await sb()
+    .from(table).update(clean).eq('id', id).eq('user_id', LEON_USER_ID).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, table, updated: data })
 }
