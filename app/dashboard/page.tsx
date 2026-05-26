@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import type { User } from '@supabase/supabase-js'
 
 import SecondBrain from '@/components/modules/SecondBrain'
-import Finances from '@/components/modules/Finances'
+import Edgar from '@/components/modules/Edgar'
 import Investments from '@/components/modules/Investments'
 import News from '@/components/modules/News'
 import ThinkSpace from '@/components/modules/ThinkSpace'
@@ -15,7 +15,7 @@ import TalkToOren from '@/components/modules/TalkToOren'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
 
-type Screen = 'home' | 'brain' | 'finance' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
+type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [priorities, setPriorities] = useState<Priority[]>([])
   const [events, setEvents] = useState<CalEvent[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [sysStatus, setSysStatus] = useState<any>(null)
 
   useEffect(() => {
     const supabase = createClient()
@@ -60,6 +61,7 @@ export default function Dashboard() {
     supabase.from('goals').select('id, text, done').eq('user_id', user.id).eq('done', false).limit(3).then(({ data }: any) => {
       if (data) setGoals(data)
     })
+    fetch('/api/systems').then(r => r.json()).then(setSysStatus).catch(() => {});
     fetch('/api/calendar').then(r => r.json()).then(d => { if (d.events) setEvents(d.events) }).catch(() => {})
   }, [user])
 
@@ -114,7 +116,7 @@ export default function Dashboard() {
   if (!user) return null
 
   if (screen === 'brain')   return <SecondBrain  user={user} onBack={() => setScreen('home')} />
-  if (screen === 'finance') return <Finances     user={user} onBack={() => setScreen('home')} />
+  if (screen === 'edgar') return <Edgar user={user} onBack={() => setScreen('home')} />
   if (screen === 'invest')  return <Investments  user={user} onBack={() => setScreen('home')} />
   if (screen === 'news')    return <News         user={user} onBack={() => setScreen('home')} />
   if (screen === 'think')   return <ThinkSpace   user={user} onBack={() => setScreen('home')} />
@@ -129,7 +131,7 @@ export default function Dashboard() {
 
   const modules = [
     { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center' },
-    { id: 'finance', key: '02', label: 'FINANCES',    sub: 'Wealth & Liquidity' },
+    { id: 'edgar', key: '02', label: 'EDGAR',       sub: 'Autonomous Trading' },
     { id: 'invest',  key: '03', label: 'INVESTMENTS', sub: 'Portfolio & Returns' },
     { id: 'news',    key: '04', label: 'NEWS',        sub: 'Intel & Headlines' },
     { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think' },
