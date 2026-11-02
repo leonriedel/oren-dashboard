@@ -12,8 +12,10 @@ import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
 import SocialMedia from '@/components/modules/SocialMedia'
 import TalkToOren from '@/components/modules/TalkToOren'
+import Weather from '@/components/modules/Weather'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
@@ -33,6 +35,7 @@ function getTimeFromEvent(e: CalEvent): string {
 
 export default function Dashboard() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [user, setUser] = useState<User | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
   const [time, setTime] = useState({ bali: '', de: '', date: '', mode: '' })
@@ -173,7 +176,7 @@ export default function Dashboard() {
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0,
           padding: '14px 56px 14px 28px',
-          display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr',
           gap: 24, alignItems: 'center', zIndex: 20,
           fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5,
           color: '#7ea6d5',
@@ -207,12 +210,12 @@ export default function Dashboard() {
 
         {/* ═══ MAIN GRID ═══ */}
         <div style={{
-          paddingTop: 64,
+          paddingTop: isMobile ? 120 : 64,
           paddingBottom: 24,
-          paddingLeft: 24,
-          paddingRight: 24,
+          paddingLeft: isMobile ? 12 : 24,
+          paddingRight: isMobile ? 12 : 24,
           display: 'grid',
-          gridTemplateColumns: '300px 1fr 320px',
+          gridTemplateColumns: isMobile ? '1fr' : '300px 1fr 320px',
           gap: 18,
           minHeight: '100vh',
           position: 'relative',
@@ -221,6 +224,7 @@ export default function Dashboard() {
 
           {/* LEFT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Weather />
             <HUDPanel title="◉ TERMINE" subtitle={events.length ? `${String(events.length).padStart(2,'0')} TODAY` : '00'}>
               {events.length === 0 ? (
                 <Empty text="Keine Termine heute" />
