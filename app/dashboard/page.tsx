@@ -154,6 +154,7 @@ export default function Dashboard() {
     { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think' },
     { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance' },
     { id: 'social',  key: '07', label: 'SOCIAL MEDIA', sub: 'Content & Growth' },
+    { id: 'calendar', key: '08', label: 'KALENDER', sub: 'Google Calendar Live' },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -429,11 +430,17 @@ export default function Dashboard() {
               justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>◇ MODULES</span>
-              <span style={{ color: '#34d399' }}>● 7/7 ACTIVE</span>
+              <span style={{ color: '#34d399' }}>● 8/8 ACTIVE</span>
             </div>
 
             {modules.map(m => (
-              <HexButton key={m.id} onClick={() => setScreen(m.id as Screen)} k={m.key} label={m.label} sub={m.sub} />
+              <HexButton
+                key={m.id}
+                onClick={() => m.id === 'calendar' ? router.push('/dashboard/calendar') : setScreen(m.id as Screen)}
+                k={m.key}
+                label={m.label}
+                sub={m.sub}
+              />
             ))}
 
             <HUDPanel title="◇ TELEMETRY" subtitle="LIVE">

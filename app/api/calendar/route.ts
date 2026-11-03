@@ -1,138 +1,131 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const ICAL_URL = process.env.GOOGLE_CAL_ICAL_URL || ''
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''
+const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || ''
+const REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN || ''
+const CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || 'primary'
 
-// Parse iCal date string: "20261104T090000Z" or "20261104T090000" or "20261104"
-function parseICalDate(raw: string): Date | null {
-  if (!raw) return null
-  // All-day: YYYYMMDD
-  if (/^\d{8}$/.test(raw)) {
-    const y = parseInt(raw.slice(0, 4))
-    const m = parseInt(raw.slice(4, 6)) - 1
-    const d = parseInt(raw.slice(6, 8))
-    return new Date(Date.UTC(y, m, d))
+// Simple in-memory access token cache (resets per cold start; fine for our scale)
+let cachedToken: { token: string; expiresAt: number } | null = null
+
+async function getAccessToken(): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 60000) {
+    return cachedToken.token
   }
-  // With time: YYYYMMDDTHHMMSS[Z]
-  const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/)
-  if (!match) return null
-  const [, y, m, d, hh, mm, ss, z] = match
-  if (z === 'Z') {
-    return new Date(Date.UTC(+y, +m - 1, +d, +hh, +mm, +ss))
+  if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
+    throw new Error('Google OAuth not configured: missing CLIENT_ID / CLIENT_SECRET / REFRESH_TOKEN')
   }
-  // Floating/local time → treat as local
-  return new Date(+y, +m - 1, +d, +hh, +mm, +ss)
-}
-
-// Unfold iCal lines (lines starting with space/tab are continuations)
-function unfold(text: string): string[] {
-  const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const out: string[] = []
-  for (const line of lines) {
-    if ((line.startsWith(' ') || line.startsWith('\t')) && out.length > 0) {
-      out[out.length - 1] += line.slice(1)
-    } else {
-      out.push(line)
-    }
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      refresh_token: REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }),
+  })
+  if (!res.ok) {
+    throw new Error(`Token refresh failed: ${res.status} ${await res.text()}`)
   }
-  return out
-}
-
-// Decode iCal text (unescape commas, newlines, backslashes)
-function decodeText(s: string): string {
-  return s.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').trim()
-}
-
-type Event = {
-  id: string
-  title: string
-  date: string
-  dateEnd: string | null
-  location: string | null
+  const data = await res.json()
+  cachedToken = {
+    token: data.access_token,
+    expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+  }
+  return cachedToken.token
 }
 
 export async function GET() {
   try {
-    if (!ICAL_URL) {
-      return NextResponse.json({ events: [], error: 'GOOGLE_CAL_ICAL_URL not set' }, { status: 200 })
-    }
-
-    const res = await fetch(ICAL_URL, {
-      next: { revalidate: 300 },
-      headers: { 'User-Agent': 'oren-dashboard/1.0' }
-    })
-
-    if (!res.ok) {
-      return NextResponse.json({ events: [], error: `iCal fetch failed: ${res.status}` }, { status: 200 })
-    }
-
-    const icsText = await res.text()
-    const lines = unfold(icsText)
-
-    const events: Event[] = []
+    const token = await getAccessToken()
     const now = new Date()
     const horizon = new Date()
     horizon.setDate(now.getDate() + 30)
 
-    let inEvent = false
-    let cur: Partial<Event> & { _start?: Date | null; _rrule?: string } = {}
+    const params = new URLSearchParams({
+      timeMin: now.toISOString(),
+      timeMax: horizon.toISOString(),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '100',
+    })
 
-    for (const line of lines) {
-      if (line === 'BEGIN:VEVENT') {
-        inEvent = true
-        cur = {}
-        continue
-      }
-      if (line === 'END:VEVENT') {
-        inEvent = false
-        if (cur._start && cur.title) {
-          const start = cur._start
-          const hasRrule = Boolean(cur._rrule)
-          // skip non-recurring past events; keep recurring for simple handling
-          if (hasRrule || (start >= now && start <= horizon)) {
-            // For recurring events, we naively show the base event if its start is in range
-            // Full RRULE expansion skipped for simplicity (would need rrule lib)
-            if (!hasRrule || (start >= now && start <= horizon)) {
-              events.push({
-                id: cur.id || `${start.getTime()}`,
-                title: cur.title,
-                date: start.toISOString(),
-                dateEnd: cur.dateEnd || null,
-                location: cur.location || null,
-              })
-            }
-          }
-        }
-        continue
-      }
-      if (!inEvent) continue
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?${params}`,
+      { headers: { Authorization: `Bearer ${token}` }, next: { revalidate: 60 } }
+    )
 
-      // key[;params]:value
-      const colonIdx = line.indexOf(':')
-      if (colonIdx === -1) continue
-      const keyPart = line.slice(0, colonIdx)
-      const value = line.slice(colonIdx + 1)
-      const key = keyPart.split(';')[0].toUpperCase()
-
-      if (key === 'SUMMARY') cur.title = decodeText(value)
-      else if (key === 'UID') cur.id = value
-      else if (key === 'LOCATION') cur.location = decodeText(value)
-      else if (key === 'DTSTART') cur._start = parseICalDate(value)
-      else if (key === 'DTEND') {
-        const d = parseICalDate(value)
-        cur.dateEnd = d ? d.toISOString() : null
-      }
-      else if (key === 'RRULE') cur._rrule = value
+    if (!res.ok) {
+      return NextResponse.json({ events: [], error: `Google API: ${res.status} ${await res.text()}` }, { status: 200 })
     }
 
-    events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const data = await res.json()
 
-    return NextResponse.json({ events: events.slice(0, 50) })
+    const events = (data.items || []).map((item: any) => ({
+      id: item.id,
+      title: item.summary || 'Kein Titel',
+      date: item.start?.dateTime || item.start?.date,
+      dateEnd: item.end?.dateTime || item.end?.date || null,
+      location: item.location || null,
+      htmlLink: item.htmlLink || null,
+    }))
+
+    return NextResponse.json({ events })
   } catch (error) {
-    console.error('Calendar API error:', error)
+    console.error('Calendar GET error:', error)
     return NextResponse.json({ events: [], error: String(error) }, { status: 200 })
   }
 }
 
-export async function POST() {
-  return NextResponse.json({ ok: false, error: 'Write disabled — using Google Calendar read-only via iCal' }, { status: 200 })
+export async function POST(req: NextRequest) {
+  try {
+    // Only Oren (bot) may write events — same PIN as /api/oren
+    const OREN_PIN = process.env.OREN_ACCESS_PIN
+    if (OREN_PIN && req.headers.get('x-api-key') !== OREN_PIN) {
+      return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
+    }
+
+    const { title, start, end, notes, location } = await req.json()
+    if (!title || !start) {
+      return NextResponse.json({ ok: false, error: 'title und start sind Pflicht' }, { status: 400 })
+    }
+
+    const token = await getAccessToken()
+
+    // Default: 1h duration if no end provided
+    const startDate = new Date(start)
+    const endDate = end ? new Date(end) : new Date(startDate.getTime() + 60 * 60 * 1000)
+
+    const body = {
+      summary: title,
+      description: notes || undefined,
+      location: location || undefined,
+      start: { dateTime: startDate.toISOString(), timeZone: 'Asia/Makassar' },
+      end: { dateTime: endDate.toISOString(), timeZone: 'Asia/Makassar' },
+    }
+
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    )
+
+    if (!res.ok) {
+      const err = await res.text()
+      return NextResponse.json({ ok: false, error: `Google POST: ${res.status} ${err}` }, { status: 200 })
+    }
+
+    const data = await res.json()
+    return NextResponse.json({ ok: true, id: data.id, htmlLink: data.htmlLink, title, start, end: endDate.toISOString() })
+  } catch (error) {
+    console.error('Calendar POST error:', error)
+    return NextResponse.json({ ok: false, error: String(error) }, { status: 200 })
+  }
 }
