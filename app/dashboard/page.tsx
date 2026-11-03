@@ -27,10 +27,24 @@ type Goal = { id: string; text: string; done: boolean }
 // ─── helper: extract time from ISO date string ─────────────────
 function getTimeFromEvent(e: CalEvent): string {
   if (e.time && e.time.length > 0) return e.time
-  if (e.date && e.date.includes('T')) {
-    return e.date.split('T')[1].slice(0, 5)
+  if (!e.date) return ''
+  // All-day events come as midnight UTC → show "ganztägig"
+  // Timed events get formatted in Bali timezone
+  const d = new Date(e.date)
+  const baliTime = d.toLocaleTimeString('de-DE', {
+    timeZone: 'Asia/Makassar',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  // All-day heuristic: if it hits midnight exactly in Bali, treat as all-day
+  if (baliTime === '00:00' && e.dateEnd) {
+    const end = new Date(e.dateEnd)
+    const durationMs = end.getTime() - d.getTime()
+    // All-day events are typically 24h or multiples
+    if (durationMs >= 20 * 60 * 60 * 1000) return 'all-day'
   }
-  return ''
+  return baliTime
 }
 
 export default function Dashboard() {
