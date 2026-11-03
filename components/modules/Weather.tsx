@@ -88,65 +88,61 @@ export default function Weather() {
             <div
               key={city.id}
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'auto 1fr auto auto',
+                display: 'flex',
                 alignItems: 'center',
-                gap: 12,
-                padding: '8px 10px',
+                justifyContent: 'space-between',
+                gap: 10,
+                padding: '10px 12px',
                 background: city.home ? 'rgba(201, 169, 97, 0.06)' : 'rgba(10, 20, 35, 0.4)',
                 border: city.home ? '1px solid rgba(201, 169, 97, 0.3)' : '1px solid rgba(80, 140, 220, 0.08)',
                 borderRadius: 6,
-                position: 'relative',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
               }}
             >
-              <div style={{
-                fontFamily: 'monospace',
-                fontSize: 9,
-                letterSpacing: 1.5,
-                color: city.home ? '#c9a961' : 'rgba(128, 192, 255, 0.5)',
-                width: 90,
-                fontWeight: 500,
-              }}>
-                {city.name.toUpperCase()}
-                {city.home && (
-                  <span style={{
-                    marginLeft: 6,
-                    fontSize: 7,
-                    color: '#c9a961',
-                    letterSpacing: 1,
-                  }}>
-                    ●
-                  </span>
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: city.home ? '#c9a961' : 'rgba(128, 192, 255, 0.65)',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {city.name.toUpperCase()}
+                  {city.home && (
+                    <span style={{
+                      marginLeft: 6,
+                      fontSize: 8,
+                      color: '#c9a961',
+                      letterSpacing: 1,
+                    }}>
+                      ● HOME
+                    </span>
+                  )}
+                </div>
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  color: 'rgba(180, 210, 240, 0.5)',
+                  letterSpacing: 0.5,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {city.condition} · H{city.high}° L{city.low}°
+                </div>
               </div>
 
               <div style={{
                 fontFamily: 'monospace',
-                fontSize: 10,
-                color: 'rgba(180, 210, 240, 0.6)',
-                letterSpacing: 0.5,
-              }}>
-                {city.condition}
-              </div>
-
-              <div style={{
-                fontFamily: 'monospace',
-                fontSize: 9,
-                color: 'rgba(128, 192, 255, 0.4)',
-                letterSpacing: 1,
-                minWidth: 60,
-                textAlign: 'right',
-              }}>
-                H{city.high}° L{city.low}°
-              </div>
-
-              <div style={{
-                fontFamily: 'monospace',
-                fontSize: 18,
+                fontSize: 24,
                 fontWeight: 300,
                 color: city.home ? '#f5e6c0' : '#ffffff',
-                minWidth: 42,
-                textAlign: 'right',
+                lineHeight: 1,
+                flexShrink: 0,
               }}>
                 {city.temp}°
               </div>
