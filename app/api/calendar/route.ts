@@ -1,106 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
+import ical from 'node-ical'
 
-const NOTION_TOKEN = process.env.NOTION_TOKEN
-const DATABASE_ID = '0db5af1e64c54d418d3c832e87f26097'
+const ICAL_URL = process.env.GOOGLE_CAL_ICAL_URL || ''
 
 export async function GET() {
   try {
-    const today = new Date().toISOString().split('T')[0]
+    if (!ICAL_URL) {
+      return NextResponse.json({ events: [], error: 'GOOGLE_CAL_ICAL_URL not set' }, { status: 200 })
+    }
 
-    const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        filter: {
-          property: 'Datum',
-          date: { on_or_after: today }
-        },
-        sorts: [{ property: 'Datum', direction: 'ascending' }],
-        page_size: 20,
-      })
+    const res = await fetch(ICAL_URL, {
+      next: { revalidate: 300 },
+      headers: { 'User-Agent': 'oren-dashboard/1.0' }
     })
 
     if (!res.ok) {
-      const err = await res.text()
-      console.error('Notion API error:', err)
-      return NextResponse.json({ events: [], error: err }, { status: 200 })
+      return NextResponse.json({ events: [], error: `iCal fetch failed: ${res.status}` }, { status: 200 })
     }
 
-    const data = await res.json()
+    const icsText = await res.text()
+    const data = ical.sync.parseICS(icsText)
 
-    const events = data.results.map((page: any) => {
-      const props = page.properties
+    const now = new Date()
+    const horizon = new Date()
+    horizon.setDate(now.getDate() + 30)
 
-      const titleProp = Object.values(props).find((p: any) => p.type === 'title') as any
-      const title = titleProp?.title?.[0]?.plain_text || 'Kein Titel'
+    const events: any[] = []
 
-      const dateProp = Object.values(props).find((p: any) => p.type === 'date') as any
-      const date = dateProp?.date?.start || null
-      const dateEnd = dateProp?.date?.end || null
+    for (const key of Object.keys(data)) {
+      const item: any = data[key]
+      if (item.type !== 'VEVENT') continue
 
-      const timeStr = date && date.includes("T") ? date.split("T")[1].slice(0,5) : ""; return { id: page.id, title, date, dateEnd, time: timeStr }
-    }).filter((e: any) => e.date)
+      // Handle recurring events: get next instance within horizon
+      if (item.rrule) {
+        try {
+          const occurrences = item.rrule.between(now, horizon, true)
+          for (const occ of occurrences) {
+            const duration = item.end && item.start ? (item.end.getTime() - item.start.getTime()) : 60 * 60 * 1000
+            const end = new Date(occ.getTime() + duration)
+            events.push({
+              id: `${item.uid}-${occ.getTime()}`,
+              title: item.summary || 'Kein Titel',
+              date: occ.toISOString(),
+              dateEnd: end.toISOString(),
+              location: item.location || null
+            })
+          }
+        } catch (e) {
+          // skip broken recurrence
+        }
+        continue
+      }
 
-    return NextResponse.json({ events })
+      const start: Date = item.start
+      if (!start) continue
+      if (start < now) continue
+      if (start > horizon) continue
+
+      events.push({
+        id: item.uid || `${key}-${start.getTime()}`,
+        title: item.summary || 'Kein Titel',
+        date: start.toISOString(),
+        dateEnd: item.end ? item.end.toISOString() : null,
+        location: item.location || null
+      })
+    }
+
+    events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    return NextResponse.json({ events: events.slice(0, 50) })
   } catch (error) {
     console.error('Calendar API error:', error)
     return NextResponse.json({ events: [], error: String(error) }, { status: 200 })
   }
 }
 
-export async function POST(req: NextRequest) {
-  try {
-    const { title, start, end, notes } = await req.json()
-
-    if (!title || !start) {
-      return NextResponse.json({ ok: false, error: 'title und start sind Pflicht' }, { status: 400 })
-    }
-
-    const properties: any = {
-      'Titel': {
-        title: [{ text: { content: title } }]
-      },
-      'Datum': {
-        date: {
-          start: start,
-          ...(end ? { end: end } : {})
-        }
-      }
-    }
-
-    if (notes) {
-      properties['Notizen'] = {
-        rich_text: [{ text: { content: notes } }]
-      }
-    }
-
-    const res = await fetch('https://api.notion.com/v1/pages', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        parent: { database_id: DATABASE_ID },
-        properties
-      })
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('Notion POST error:', err)
-      return NextResponse.json({ ok: false, error: err }, { status: 200 })
-    }
-
-    const data = await res.json()
-    return NextResponse.json({ ok: true, id: data.id, title, start, end })
-  } catch (error) {
-    console.error('Calendar POST error:', error)
-    return NextResponse.json({ ok: false, error: String(error) }, { status: 200 })
-  }
+// Legacy POST kept as no-op (Notion write disabled since switch to iCal)
+export async function POST() {
+  return NextResponse.json({ ok: false, error: 'Write disabled — using Google Calendar read-only via iCal' }, { status: 200 })
 }
