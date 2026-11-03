@@ -1,7 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ical from 'node-ical'
 
 const ICAL_URL = process.env.GOOGLE_CAL_ICAL_URL || ''
+
+// Parse iCal date string: "20261104T090000Z" or "20261104T090000" or "20261104"
+function parseICalDate(raw: string): Date | null {
+  if (!raw) return null
+  // All-day: YYYYMMDD
+  if (/^\d{8}$/.test(raw)) {
+    const y = parseInt(raw.slice(0, 4))
+    const m = parseInt(raw.slice(4, 6)) - 1
+    const d = parseInt(raw.slice(6, 8))
+    return new Date(Date.UTC(y, m, d))
+  }
+  // With time: YYYYMMDDTHHMMSS[Z]
+  const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z)?$/)
+  if (!match) return null
+  const [, y, m, d, hh, mm, ss, z] = match
+  if (z === 'Z') {
+    return new Date(Date.UTC(+y, +m - 1, +d, +hh, +mm, +ss))
+  }
+  // Floating/local time → treat as local
+  return new Date(+y, +m - 1, +d, +hh, +mm, +ss)
+}
+
+// Unfold iCal lines (lines starting with space/tab are continuations)
+function unfold(text: string): string[] {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const out: string[] = []
+  for (const line of lines) {
+    if ((line.startsWith(' ') || line.startsWith('\t')) && out.length > 0) {
+      out[out.length - 1] += line.slice(1)
+    } else {
+      out.push(line)
+    }
+  }
+  return out
+}
+
+// Decode iCal text (unescape commas, newlines, backslashes)
+function decodeText(s: string): string {
+  return s.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').trim()
+}
+
+type Event = {
+  id: string
+  title: string
+  date: string
+  dateEnd: string | null
+  location: string | null
+}
 
 export async function GET() {
   try {
@@ -19,51 +66,62 @@ export async function GET() {
     }
 
     const icsText = await res.text()
-    const data = ical.sync.parseICS(icsText)
+    const lines = unfold(icsText)
 
+    const events: Event[] = []
     const now = new Date()
     const horizon = new Date()
     horizon.setDate(now.getDate() + 30)
 
-    const events: any[] = []
+    let inEvent = false
+    let cur: Partial<Event> & { _start?: Date | null; _rrule?: string } = {}
 
-    for (const key of Object.keys(data)) {
-      const item: any = data[key]
-      if (item.type !== 'VEVENT') continue
-
-      // Handle recurring events: get next instance within horizon
-      if (item.rrule) {
-        try {
-          const occurrences = item.rrule.between(now, horizon, true)
-          for (const occ of occurrences) {
-            const duration = item.end && item.start ? (item.end.getTime() - item.start.getTime()) : 60 * 60 * 1000
-            const end = new Date(occ.getTime() + duration)
-            events.push({
-              id: `${item.uid}-${occ.getTime()}`,
-              title: item.summary || 'Kein Titel',
-              date: occ.toISOString(),
-              dateEnd: end.toISOString(),
-              location: item.location || null
-            })
+    for (const line of lines) {
+      if (line === 'BEGIN:VEVENT') {
+        inEvent = true
+        cur = {}
+        continue
+      }
+      if (line === 'END:VEVENT') {
+        inEvent = false
+        if (cur._start && cur.title) {
+          const start = cur._start
+          const hasRrule = Boolean(cur._rrule)
+          // skip non-recurring past events; keep recurring for simple handling
+          if (hasRrule || (start >= now && start <= horizon)) {
+            // For recurring events, we naively show the base event if its start is in range
+            // Full RRULE expansion skipped for simplicity (would need rrule lib)
+            if (!hasRrule || (start >= now && start <= horizon)) {
+              events.push({
+                id: cur.id || `${start.getTime()}`,
+                title: cur.title,
+                date: start.toISOString(),
+                dateEnd: cur.dateEnd || null,
+                location: cur.location || null,
+              })
+            }
           }
-        } catch (e) {
-          // skip broken recurrence
         }
         continue
       }
+      if (!inEvent) continue
 
-      const start: Date = item.start
-      if (!start) continue
-      if (start < now) continue
-      if (start > horizon) continue
+      // key[;params]:value
+      const colonIdx = line.indexOf(':')
+      if (colonIdx === -1) continue
+      const keyPart = line.slice(0, colonIdx)
+      const value = line.slice(colonIdx + 1)
+      const key = keyPart.split(';')[0].toUpperCase()
 
-      events.push({
-        id: item.uid || `${key}-${start.getTime()}`,
-        title: item.summary || 'Kein Titel',
-        date: start.toISOString(),
-        dateEnd: item.end ? item.end.toISOString() : null,
-        location: item.location || null
-      })
+      if (key === 'SUMMARY') cur.title = decodeText(value)
+      else if (key === 'UID') cur.id = value
+      else if (key === 'LOCATION') cur.location = decodeText(value)
+      else if (key === 'DTSTART') cur._start = parseICalDate(value)
+      else if (key === 'DTEND') {
+        const d = parseICalDate(value)
+        cur.dateEnd = d ? d.toISOString() : null
+      }
+      else if (key === 'RRULE') cur._rrule = value
     }
 
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
@@ -75,7 +133,6 @@ export async function GET() {
   }
 }
 
-// Legacy POST kept as no-op (Notion write disabled since switch to iCal)
 export async function POST() {
   return NextResponse.json({ ok: false, error: 'Write disabled — using Google Calendar read-only via iCal' }, { status: 200 })
 }
