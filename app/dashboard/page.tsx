@@ -225,14 +225,46 @@ export default function Dashboard() {
           {/* LEFT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Weather />
-            <HUDPanel title="◉ TERMINE" subtitle={events.length ? `${String(events.length).padStart(2,'0')} TODAY` : '00'}>
-              {events.length === 0 ? (
-                <Empty text="Keine Termine heute" />
-              ) : (
-                events.slice(0, 8).map((e, i) => (
-                  <DataRow key={e.id || i} idx={getTimeFromEvent(e) || '--:--'} text={e.title} idxColor="#80c0ff" />
-                ))
-              )}
+            <HUDPanel title="◉ TERMINE" subtitle="3 TAGE">
+              {(() => {
+                const today = new Date(); today.setHours(0,0,0,0)
+                const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1)
+                const dayAfter = new Date(today); dayAfter.setDate(today.getDate()+2)
+                const horizon = new Date(today); horizon.setDate(today.getDate()+3)
+                const inRange = events.filter(e => {
+                  if (!e.date) return false
+                  const d = new Date(e.date)
+                  return d >= today && d < horizon
+                })
+                if (inRange.length === 0) return <Empty text="Keine Termine in den nächsten 3 Tagen" />
+                const buckets: { label: string; items: typeof inRange }[] = [
+                  { label: 'HEUTE', items: inRange.filter(e => { const d = new Date(e.date!); return d >= today && d < tomorrow }) },
+                  { label: 'MORGEN', items: inRange.filter(e => { const d = new Date(e.date!); return d >= tomorrow && d < dayAfter }) },
+                  { label: 'ÜBERMORGEN', items: inRange.filter(e => { const d = new Date(e.date!); return d >= dayAfter && d < horizon }) },
+                ]
+                return (
+                  <>
+                    {buckets.map((b, bi) => (
+                      <div key={b.label} style={{ marginTop: bi === 0 ? 0 : 10 }}>
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '6px 0 4px', borderBottom: '1px solid rgba(80,180,255,0.15)', marginBottom: 2,
+                        }}>
+                          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 2, color: '#80c0ff', fontWeight: 700 }}>{b.label}</div>
+                          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'rgba(128,192,255,0.4)' }}>{String(b.items.length).padStart(2,'0')}</div>
+                        </div>
+                        {b.items.length === 0 ? (
+                          <div style={{ fontSize: 10, color: 'rgba(120,180,230,0.3)', fontStyle: 'italic', padding: '4px 0' }}>frei</div>
+                        ) : (
+                          b.items.map((e, i) => (
+                            <DataRow key={e.id || `${b.label}-${i}`} idx={getTimeFromEvent(e) || '--:--'} text={e.title} idxColor="#80c0ff" />
+                          ))
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )
+              })()}
             </HUDPanel>
 
             <HUDPanel title="◈ PRIORITIES" subtitle={`${String(priorities.length).padStart(2,'0')} OPEN`}>
