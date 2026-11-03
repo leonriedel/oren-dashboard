@@ -251,10 +251,16 @@ export default function Dashboard() {
                   return d >= today && d < horizon
                 })
                 if (inRange.length === 0) return <Empty text="Keine Termine in den nächsten 3 Tagen" />
-                const buckets: { label: string; items: typeof inRange }[] = [
-                  { label: 'HEUTE', items: inRange.filter(e => { const d = new Date(e.date!); return d >= today && d < tomorrow }) },
-                  { label: 'MORGEN', items: inRange.filter(e => { const d = new Date(e.date!); return d >= tomorrow && d < dayAfter }) },
-                  { label: 'ÜBERMORGEN', items: inRange.filter(e => { const d = new Date(e.date!); return d >= dayAfter && d < horizon }) },
+                const fmtDay = (d: Date) => {
+                  const wd = ['SO','MO','DI','MI','DO','FR','SA'][d.getDay()]
+                  const dd = String(d.getDate()).padStart(2,'0')
+                  const mm = String(d.getMonth()+1).padStart(2,'0')
+                  return `${wd} ${dd}.${mm}`
+                }
+                const buckets: { label: string; dateLabel: string; items: typeof inRange }[] = [
+                  { label: 'HEUTE', dateLabel: fmtDay(today), items: inRange.filter(e => { const d = new Date(e.date!); return d >= today && d < tomorrow }) },
+                  { label: 'MORGEN', dateLabel: fmtDay(tomorrow), items: inRange.filter(e => { const d = new Date(e.date!); return d >= tomorrow && d < dayAfter }) },
+                  { label: 'ÜBERMORGEN', dateLabel: fmtDay(dayAfter), items: inRange.filter(e => { const d = new Date(e.date!); return d >= dayAfter && d < horizon }) },
                 ]
                 return (
                   <>
@@ -265,7 +271,7 @@ export default function Dashboard() {
                           padding: '6px 0 4px', borderBottom: '1px solid rgba(80,180,255,0.15)', marginBottom: 2,
                         }}>
                           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 2, color: '#80c0ff', fontWeight: 700 }}>{b.label}</div>
-                          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'rgba(128,192,255,0.4)' }}>{String(b.items.length).padStart(2,'0')}</div>
+                          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'rgba(128,192,255,0.5)', letterSpacing: 1 }}>{b.dateLabel}</div>
                         </div>
                         {b.items.length === 0 ? (
                           <div style={{ fontSize: 10, color: 'rgba(120,180,230,0.3)', fontStyle: 'italic', padding: '4px 0' }}>frei</div>
