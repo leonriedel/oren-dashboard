@@ -21,7 +21,7 @@ type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
-type CalEvent = { id: string; title: string; date?: string; time?: string }
+type CalEvent = { id: string; title: string; date?: string; dateEnd?: string | null; time?: string; location?: string | null }
 type Goal = { id: string; text: string; done: boolean }
 
 // ─── helper: extract time from ISO date string ─────────────────
