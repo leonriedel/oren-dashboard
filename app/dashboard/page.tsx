@@ -318,41 +318,6 @@ export default function Dashboard() {
                 ))
               )}
             </HUDPanel>
-
-            {/* SYSTEM STATUS panel — Leon / OREN / Edgar */}
-            <HUDPanel title="◇ SYSTEMS" subtitle="LIVE STATUS">
-              {systems.map((s, i) => (
-                <div key={s.name} style={{
-                  padding: '10px 0',
-                  borderBottom: i < systems.length - 1 ? '1px solid rgba(80,180,255,0.05)' : 'none',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <PulseDot color={s.color} />
-                      <span style={{
-                        fontFamily: 'Space Mono, monospace', fontSize: 10.5, fontWeight: 700,
-                        color: '#d0e5ff', letterSpacing: 2,
-                      }}>{s.name}</span>
-                    </div>
-                    <span style={{
-                      fontFamily: 'Space Mono, monospace', fontSize: 9,
-                      color: s.color, letterSpacing: 1.5,
-                    }}>{s.status}</span>
-                  </div>
-                  <div style={{
-                    width: '100%', height: 5, background: 'rgba(80,180,255,0.06)',
-                    borderRadius: 1, overflow: 'hidden',
-                  }}>
-                    <div style={{
-                      width: `${s.uptime}%`, height: '100%',
-                      background: `linear-gradient(90deg, ${s.color}, ${s.color}aa)`,
-                      boxShadow: `0 0 8px ${s.color}`,
-                      transition: 'width 1s ease',
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </HUDPanel>
           </div>
 
           {/* CENTER */}
@@ -477,6 +442,40 @@ export default function Dashboard() {
               <Tele label="LATENCY" value="42MS" green />
               <Tele label="UPTIME" value="99.4%" green />
               <Tele label="TOKENS" value="2.4K" />
+            </HUDPanel>
+            {/* SYSTEM STATUS panel — Leon / OREN / Edgar */}
+            <HUDPanel title="◇ SYSTEMS" subtitle="LIVE STATUS">
+              {systems.map((s, i) => (
+                <div key={s.name} style={{
+                  padding: '10px 0',
+                  borderBottom: i < systems.length - 1 ? '1px solid rgba(80,180,255,0.05)' : 'none',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <PulseDot color={s.color} />
+                      <span style={{
+                        fontFamily: 'Space Mono, monospace', fontSize: 10.5, fontWeight: 700,
+                        color: '#d0e5ff', letterSpacing: 2,
+                      }}>{s.name}</span>
+                    </div>
+                    <span style={{
+                      fontFamily: 'Space Mono, monospace', fontSize: 9,
+                      color: s.color, letterSpacing: 1.5,
+                    }}>{s.status}</span>
+                  </div>
+                  <div style={{
+                    width: '100%', height: 5, background: 'rgba(80,180,255,0.06)',
+                    borderRadius: 1, overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${s.uptime}%`, height: '100%',
+                      background: `linear-gradient(90deg, ${s.color}, ${s.color}aa)`,
+                      boxShadow: `0 0 8px ${s.color}`,
+                      transition: 'width 1s ease',
+                    }} />
+                  </div>
+                </div>
+              ))}
             </HUDPanel>
           </div>
         </div>
