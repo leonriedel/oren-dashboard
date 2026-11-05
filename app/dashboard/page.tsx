@@ -393,41 +393,7 @@ export default function Dashboard() {
               }}>● {stateLabel}</div>
             </div>
 
-            <div style={{ width: '100%', maxWidth: 560, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{
-                display: 'flex', gap: 6, alignItems: 'center',
-                background: 'rgba(8,20,48,0.7)',
-                border: '1px solid rgba(80,180,255,0.30)',
-                borderRadius: 4, padding: '8px 8px 8px 18px',
-                backdropFilter: 'blur(12px)',
-                boxShadow: '0 0 28px rgba(60,140,255,0.18), inset 0 0 0 1px rgba(80,180,255,0.05)',
-              }}>
-                <span style={{ color: 'rgba(120,200,255,0.7)', fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2 }}>›</span>
-                <input
-                  value={quickInput}
-                  onChange={e => setQuickInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') sendQuick() }}
-                  placeholder="INPUT COMMAND..."
-                  style={{
-                    flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                    color: '#d8eaff', fontSize: 13, fontFamily: 'Space Mono, monospace', letterSpacing: 0.5,
-                  }}
-                />
-                <button onClick={() => setScreen('talk')} title="Full chat" style={iconBtn}>⛶</button>
-                <button onClick={sendQuick} style={{ ...iconBtn, background: 'rgba(80,180,255,0.30)', borderColor: 'rgba(120,200,255,0.7)', color: '#fff' }}>→</button>
-              </div>
-              {quickResponse && (
-                <div style={{
-                  background: 'rgba(8,20,48,0.78)',
-                  border: '1px solid rgba(80,180,255,0.25)',
-                  borderLeft: '2px solid rgba(120,200,255,0.75)',
-                  borderRadius: 4, padding: '12px 14px',
-                  fontSize: 12.5, color: '#d0e5ff', lineHeight: 1.55,
-                  fontFamily: 'DM Sans, system-ui, sans-serif',
-                  backdropFilter: 'blur(8px)',
-                }}>{quickResponse}</div>
-              )}
-            </div>
+            {/* Oren input bar removed; access the full chat via the HexButton or /talk route */}
           </div>
 
           {/* RIGHT */}
