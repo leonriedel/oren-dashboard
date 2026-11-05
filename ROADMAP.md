@@ -50,13 +50,15 @@
 
 ## Backlog (Leon's ideas, 2026-11-05)
 
+> **Strategic note (Leon):** We are capable of more than we currently use. Push into Claude's full capability surface — tool use, long-running agents, memory, document/mail workflows. Catch up to how power-users already work with Claude today, then go past.
+
 ### Trading & Finance
 - [ ] **IBKR stocks integration** — Interactive Brokers has an API; pull current positions + P/L into INVESTMENTS module
 - [ ] **Edgar Live Screening** — plug the trading bot's live signals into the Edgar module (currently shows Alpaca paper trades only)
 
 ### Communication
 - [ ] **Mail integration + automation** — read inbox, triage with Oren, draft replies, send
-- [ ] **WhatsApp bridge** — Leon's girlfriend uses Claude as mail + WhatsApp tool (currently can't; needs research — maybe WA Web via puppeteer, or official WA Business API)
+- [ ] **Mail + WhatsApp integration** — triage inbox, draft replies, send messages. Leon's girlfriend uses Claude fluidly for this; OREN should match/exceed that.
 
 ### Nice-to-have
 - [ ] Admin-only access point for Leon to talk to Oren again (if wanted later)
