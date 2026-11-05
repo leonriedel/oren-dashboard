@@ -34,7 +34,7 @@ async function getAccessToken(): Promise<string> {
 import ICAL from 'ical.js'
 
 async function fetchICal() {
-  const res = await fetch(ICAL_URL, { next: { revalidate: 300 }, headers: { 'User-Agent': 'oren-dashboard/1.0' } })
+  const res = await fetch(ICAL_URL, { next: { revalidate: 60 }, headers: { 'User-Agent': 'oren-dashboard/1.0' } })
   if (!res.ok) throw new Error(`iCal fetch failed: ${res.status}`)
   const text = await res.text()
 

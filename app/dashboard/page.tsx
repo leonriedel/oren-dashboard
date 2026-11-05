@@ -79,7 +79,21 @@ export default function Dashboard() {
       if (data) setGoals(data)
     })
     fetch('/api/systems').then(r => r.json()).then(setSysStatus).catch(() => {});
-    fetch('/api/calendar').then(r => r.json()).then(d => { if (d.events) setEvents(d.events) }).catch(() => {})
+    const loadCalendar = () => {
+      fetch('/api/calendar', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(d => { if (d.events) setEvents(d.events) })
+        .catch(() => {})
+    }
+    loadCalendar()
+    // Auto-refresh: every 2 min, plus whenever the tab regains focus
+    const interval = setInterval(loadCalendar, 2 * 60 * 1000)
+    const onFocus = () => loadCalendar()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [user])
 
   useEffect(() => {
