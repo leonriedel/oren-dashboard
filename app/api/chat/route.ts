@@ -6,7 +6,7 @@ const CHAT_ID = '7891571339'
 export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   const lastMessage = messages[messages.length - 1]?.content
-  if (!lastMessage) return NextResponse.json({ content: 'Keine Nachricht.' })
+  if (!lastMessage) return NextResponse.json({ content: 'No message.' })
 
   // Send to OREN via Telegram
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {

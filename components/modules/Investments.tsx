@@ -73,7 +73,7 @@ export default function Investments({ user, onBack }: Props) {
   }
 
   async function delInvestment(id: string) {
-    if (!confirm('Investment wirklich löschen?')) return
+    if (!confirm('Really delete this investment?')) return
     await supabase.from('investments_v2').delete().eq('id', id)
     load()
   }
@@ -89,7 +89,7 @@ export default function Investments({ user, onBack }: Props) {
   }
 
   async function delCategory(id: string) {
-    if (!confirm('Kategorie und alle Investments darin löschen?')) return
+    if (!confirm('Delete category and all investments in it?')) return
     const cat = cats.find(c => c.id === id)
     if (cat) await supabase.from('investments_v2').delete().eq('user_id', user.id).eq('category', cat.name)
     await supabase.from('investment_categories').delete().eq('id', id)
@@ -219,7 +219,7 @@ export default function Investments({ user, onBack }: Props) {
 
               {items.length === 0 && adding !== cat.name && (
                 <div style={{ color: 'var(--muted)', fontSize: 12, padding: '20px 14px', textAlign: 'center' }}>
-                  Keine Investments — + ADD klicken
+                  No investments — click + ADD
                 </div>
               )}
 
@@ -286,9 +286,9 @@ export default function Investments({ user, onBack }: Props) {
       <Card>
         {addingCat ? (
           <div style={{ display: 'flex', gap: 10 }}>
-            <input placeholder="Neue Kategorie..." value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} style={{ ...editInput, flex: 1 }} />
+            <input placeholder="New category..." value={newCatName} onChange={e => setNewCatName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCategory()} style={{ ...editInput, flex: 1 }} />
             <button onClick={addCategory} style={btn('green')}>HINZUFÜGEN</button>
-            <button onClick={() => setAddingCat(false)} style={btn('muted')}>ABBRECHEN</button>
+            <button onClick={() => setAddingCat(false)} style={btn('muted')}>CANCEL</button>
           </div>
         ) : (
           <button onClick={() => setAddingCat(true)} style={{
@@ -296,7 +296,7 @@ export default function Investments({ user, onBack }: Props) {
             border: '1px dashed rgba(80,180,255,0.30)',
             background: 'transparent', color: 'var(--cyan)',
             fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: 2, cursor: 'pointer',
-          }}>+ NEUE KATEGORIE</button>
+          }}>+ NEW CATEGORY</button>
         )}
       </Card>
     </ModuleLayout>

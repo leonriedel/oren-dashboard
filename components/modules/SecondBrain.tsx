@@ -188,7 +188,7 @@ export default function SecondBrain({ user, onBack }: Props) {
           {eventsLoading ? (
             <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13 }}>Lade Kalender...</div>
           ) : todayEvents.length === 0 ? (
-            <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13 }}>Keine Termine heute</div>
+            <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13 }}>No events today</div>
           ) : (
             todayEvents.map(e => (
               <div key={e.id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(80,180,255,0.06)', alignItems: 'flex-start' }}>
@@ -217,7 +217,7 @@ export default function SecondBrain({ user, onBack }: Props) {
           <SectionTitle color="#fbbf24" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.55)' }}>{donePrios}/{prios.length}</span>}>
             TOP PRIO
           </SectionTitle>
-          {!prios.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>Keine Prioritäten</div>}
+          {!prios.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>No priorities</div>}
           {prios.map(p => (
             <ItemRow key={p.id}>
               <div onClick={() => togglePrio(p.id, p.done)} style={{
@@ -242,7 +242,7 @@ export default function SecondBrain({ user, onBack }: Props) {
           <SectionTitle color="#34d399" action={<span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(120,180,230,0.55)' }}>{doneGoals}/{goals.length}</span>}>
             WEEKLY GOALS
           </SectionTitle>
-          {!goals.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>Keine Goals</div>}
+          {!goals.length && <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '8px 0' }}>No goals</div>}
           {goals.map(g => (
             <ItemRow key={g.id}>
               <div onClick={() => toggleGoal(g.id, g.done)} style={{

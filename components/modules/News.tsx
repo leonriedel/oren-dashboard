@@ -79,7 +79,7 @@ export default function News({ user, onBack }: Props) {
                   </SectionTitle>
                   {items.length === 0 ? (
                     <div style={{ color: 'rgba(120,180,230,0.5)', fontSize: 13, padding: '12px 0' }}>
-                      Keine News verfügbar
+                      No news available
                     </div>
                   ) : (
                     items.map((n, i) => (

@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     const { title, start, end, notes, location } = await req.json()
     if (!title || !start) {
-      return NextResponse.json({ ok: false, error: 'title und start sind Pflicht' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'title and start are required' }, { status: 400 })
     }
 
     const token = await getAccessToken()

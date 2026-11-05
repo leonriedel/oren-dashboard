@@ -90,7 +90,7 @@ export default function Dashboard() {
       const n = new Date()
       const b = new Date(n.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }))
       const d = new Date(n.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }))
-      const days = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag']
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
       const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
       const fmt = (x: Date) => String(x.getHours()).padStart(2,'0') + ':' + String(x.getMinutes()).padStart(2,'0') + ':' + String(x.getSeconds()).padStart(2,'0')
       const h = d.getHours()
@@ -156,13 +156,13 @@ export default function Dashboard() {
 
   const modules = [
     { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: false },
-    { id: 'edgar',   key: '02', label: 'EDGAR',       sub: 'Autonomous Trading',   locked: !isAdmin },
-    { id: 'invest',  key: '03', label: 'INVESTMENTS', sub: 'Portfolio & Returns',  locked: !isAdmin },
-    { id: 'news',    key: '04', label: 'NEWS',        sub: 'Intel & Headlines',    locked: false },
-    { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think',locked: false },
+    { id: 'think',   key: '02', label: 'THINKSPACE',  sub: 'Shared Notes & Boards',locked: false },
+    { id: 'edgar',   key: '03', label: 'EDGAR',       sub: 'Autonomous Trading',   locked: !isAdmin },
+    { id: 'invest',  key: '04', label: 'INVESTMENTS', sub: 'Portfolio & Returns',  locked: !isAdmin },
+    { id: 'news',    key: '05', label: 'NEWS',        sub: 'Intel & Headlines',    locked: false },
     { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance',   locked: false },
-    { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projekte & Portfolio', locked: false },
-    { id: 'calendar',key: '08', label: 'KALENDER',    sub: 'Google Calendar Live', locked: false },
+    { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projects & Portfolio', locked: false },
+    { id: 'calendar',key: '08', label: 'CALENDAR',    sub: 'Google Calendar Live', locked: false },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -221,7 +221,7 @@ export default function Dashboard() {
             display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
           }}>
             <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
-            <span>WILLKOMMEN {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}</span>
+            <span>WELCOME {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}</span>
             <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
           </div>
           <div style={{ textAlign: 'right', display: 'flex', gap: 24, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -248,7 +248,7 @@ export default function Dashboard() {
           {/* LEFT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Weather />
-            <HUDPanel title="◉ TERMINE" subtitle="3 TAGE">
+            <HUDPanel title="◉ UPCOMING" subtitle="3 DAYS">
               {(() => {
                 const today = new Date(); today.setHours(0,0,0,0)
                 const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1)
@@ -259,17 +259,17 @@ export default function Dashboard() {
                   const d = new Date(e.date)
                   return d >= today && d < horizon
                 })
-                if (inRange.length === 0) return <Empty text="Keine Termine in den nächsten 3 Tagen" />
+                if (inRange.length === 0) return <Empty text="No events in the next 3 days" />
                 const fmtDay = (d: Date) => {
-                  const wd = ['SO','MO','DI','MI','DO','FR','SA'][d.getDay()]
+                  const wd = ['SUN','MON','TUE','WED','THU','FRI','SAT'][d.getDay()]
                   const dd = String(d.getDate()).padStart(2,'0')
                   const mm = String(d.getMonth()+1).padStart(2,'0')
                   return `${wd} ${dd}.${mm}`
                 }
                 const buckets: { label: string; dateLabel: string; items: typeof inRange }[] = [
-                  { label: 'HEUTE', dateLabel: fmtDay(today), items: inRange.filter(e => { const d = new Date(e.date!); return d >= today && d < tomorrow }) },
-                  { label: 'MORGEN', dateLabel: fmtDay(tomorrow), items: inRange.filter(e => { const d = new Date(e.date!); return d >= tomorrow && d < dayAfter }) },
-                  { label: 'ÜBERMORGEN', dateLabel: fmtDay(dayAfter), items: inRange.filter(e => { const d = new Date(e.date!); return d >= dayAfter && d < horizon }) },
+                  { label: 'TODAY', dateLabel: fmtDay(today), items: inRange.filter(e => { const d = new Date(e.date!); return d >= today && d < tomorrow }) },
+                  { label: 'TOMORROW', dateLabel: fmtDay(tomorrow), items: inRange.filter(e => { const d = new Date(e.date!); return d >= tomorrow && d < dayAfter }) },
+                  { label: 'DAY AFTER', dateLabel: fmtDay(dayAfter), items: inRange.filter(e => { const d = new Date(e.date!); return d >= dayAfter && d < horizon }) },
                 ]
                 return (
                   <>
@@ -283,7 +283,7 @@ export default function Dashboard() {
                           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 9, color: 'rgba(128,192,255,0.5)', letterSpacing: 1 }}>{b.dateLabel}</div>
                         </div>
                         {b.items.length === 0 ? (
-                          <div style={{ fontSize: 10, color: 'rgba(120,180,230,0.3)', fontStyle: 'italic', padding: '4px 0' }}>frei</div>
+                          <div style={{ fontSize: 10, color: 'rgba(120,180,230,0.3)', fontStyle: 'italic', padding: '4px 0' }}>free</div>
                         ) : (
                           b.items.map((e, i) => (
                             <DataRow key={e.id || `${b.label}-${i}`} idx={getTimeFromEvent(e) || '--:--'} text={e.title} idxColor="#80c0ff" />
@@ -298,7 +298,7 @@ export default function Dashboard() {
 
             <HUDPanel title="◈ PRIORITIES" subtitle={`${String(priorities.length).padStart(2,'0')} OPEN`}>
               {priorities.length === 0 ? (
-                <Empty text="Sag OREN was wichtig ist" />
+                <Empty text="Tell OREN what matters" />
               ) : (
                 priorities.map((p, i) => (
                   <DataRow key={p.id} idx={String(i + 1).padStart(2, '0')} text={p.text} idxColor="#ffd060" />
@@ -309,7 +309,7 @@ export default function Dashboard() {
 
             <HUDPanel title="▲ GOALS" subtitle="WEEKLY">
               {goals.length === 0 ? (
-                <Empty text="Keine Goals diese Woche" />
+                <Empty text="No goals this week" />
               ) : (
                 goals.map((g, i) => (
                   <div key={g.id} style={{
@@ -636,7 +636,7 @@ function HexButton({ k, label, sub, onClick, locked }: any) {
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11.5, letterSpacing: 2.5, fontWeight: 700, color: locked ? 'rgba(200,170,130,0.75)' : '#bfdbfe' }}>{label}</div>
           <div style={{ fontSize: 9.5, color: 'rgba(150,190,230,0.55)', marginTop: 1, letterSpacing: 0.5 }}>
-            {showLockHint ? '🔒 Zugang verweigert — frag Leon' : sub}
+            {showLockHint ? '🔒 Restricted — ask Leon' : sub}
           </div>
         </div>
         <div style={{ color: locked ? 'rgba(255,180,100,0.65)' : '#80c0ff', fontSize: 13, opacity: locked ? 0.9 : 0.5 }}>

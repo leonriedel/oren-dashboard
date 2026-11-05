@@ -68,8 +68,8 @@ export function Investments({ user, onBack }: Props) {
             )
           ))}
           <div style={{ display:'flex', gap:8 }}>
-            <button onClick={() => setShowAdd(false)} style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>ABBRECHEN</button>
-            <button onClick={add} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'var(--amber)', color:'black', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SPEICHERN</button>
+            <button onClick={() => setShowAdd(false)} style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>CANCEL</button>
+            <button onClick={add} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'var(--amber)', color:'black', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SAVE</button>
           </div>
         </Card>
       ) : (
@@ -183,7 +183,7 @@ export function ThinkSpace({ user, onBack }: Props) {
               <div onClick={() => del(e.id)} style={{ cursor:'pointer', color:'var(--muted)', fontSize:18 }}>×</div>
             </ItemRow>
           ))}
-          {!entries.filter(e => e.type === activeList).length && <div style={{ color:'var(--muted)', fontSize:13 }}>Keine Einträge</div>}
+          {!entries.filter(e => e.type === activeList).length && <div style={{ color:'var(--muted)', fontSize:13 }}>No entries</div>}
         </Card>
       )}
     </ModuleLayout>
@@ -191,7 +191,7 @@ export function ThinkSpace({ user, onBack }: Props) {
 }
 
 // ============================================================
-// SPORT & ERNÄHRUNG
+// SPORT & NUTRITION
 // ============================================================
 export function Sport({ user, onBack }: Props) {
   const supabase = createClient()
@@ -241,7 +241,7 @@ export function Sport({ user, onBack }: Props) {
   }
 
   return (
-    <ModuleLayout onBack={onBack} icon="🏋️" title="SPORT & ERNÄHRUNG" titleColor="var(--orange)" sub="Body & Performance" iconBg="linear-gradient(135deg, #5c2000, #c45200)">
+    <ModuleLayout onBack={onBack} icon="🏋️" title="SPORT & NUTRITION" titleColor="var(--orange)" sub="Body & Performance" iconBg="linear-gradient(135deg, #5c2000, #c45200)">
       <Card>
         <SectionTitle color="var(--orange)" action={<span style={{ fontFamily:'var(--mono)', fontSize:11, color:'var(--muted2)' }}>{training.length} days</span>}>TRAINING PLANS</SectionTitle>
         {training.map(t => (
@@ -258,8 +258,8 @@ export function Sport({ user, onBack }: Props) {
             </select>
             <input placeholder="Übungen / Plan..." value={tf.exercise} onChange={e => setTf(p => ({...p, exercise:e.target.value}))} style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'10px 14px', color:'var(--text)', fontSize:13, outline:'none', marginBottom:8 }} />
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={() => setShowTraining(false)} style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>ABBRECHEN</button>
-              <button onClick={addTraining} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'var(--orange)', color:'white', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SPEICHERN</button>
+              <button onClick={() => setShowTraining(false)} style={{ flex:1, padding:10, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>CANCEL</button>
+              <button onClick={addTraining} style={{ flex:1, padding:10, borderRadius:10, border:'none', background:'var(--orange)', color:'white', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SAVE</button>
             </div>
           </div>
         ) : (
@@ -267,7 +267,7 @@ export function Sport({ user, onBack }: Props) {
         )}
       </Card>
       <Card>
-        <SectionTitle color="var(--orange)">🍎 ERNÄHRUNG — NOTIZEN</SectionTitle>
+        <SectionTitle color="var(--orange)">🍎 NUTRITION — NOTES</SectionTitle>
         {food.map(f => (
           <div key={f.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 0', borderBottom:'1px solid var(--border)' }}>
             <div style={{ width:6, height:6, borderRadius:'50%', background:'var(--orange)', marginTop:6, flexShrink:0 }} />
@@ -404,8 +404,8 @@ export function SocialMedia({ user, onBack }: Props) {
             </select>
             <input placeholder="Content Beschreibung..." value={form.text} onChange={e => setForm(p=>({...p,text:e.target.value}))} style={{ width:'100%', background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:10, padding:'11px 14px', color:'var(--text)', fontSize:13, outline:'none', marginBottom:8 }} />
             <div style={{ display:'flex', gap:8 }}>
-              <button onClick={() => setShowAdd(null)} style={{ flex:1, padding:12, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>ABBRECHEN</button>
-              <button onClick={addContent} style={{ flex:1, padding:12, borderRadius:10, border:'none', background:'var(--pink)', color:'white', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SPEICHERN</button>
+              <button onClick={() => setShowAdd(null)} style={{ flex:1, padding:12, borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'var(--muted2)', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>CANCEL</button>
+              <button onClick={addContent} style={{ flex:1, padding:12, borderRadius:10, border:'none', background:'var(--pink)', color:'white', cursor:'pointer', fontFamily:'var(--mono)', fontSize:11 }}>SAVE</button>
             </div>
           </div>
         </div>

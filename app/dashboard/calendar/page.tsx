@@ -12,7 +12,7 @@ export default function CalendarPage() {
     <div style={{ minHeight: '100vh', background: '#000', color: '#d0e5ff', padding: '20px 28px', fontFamily: 'Space Mono, monospace' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid rgba(80,180,255,0.15)' }}>
         <div>
-          <div style={{ fontSize: 10, letterSpacing: 3, color: '#80c0ff', marginBottom: 4 }}>◉ KALENDER</div>
+          <div style={{ fontSize: 10, letterSpacing: 3, color: '#80c0ff', marginBottom: 4 }}>◉ CALENDAR</div>
           <div style={{ fontSize: 18, letterSpacing: 1, color: '#f5f5f5', fontFamily: 'Inter, sans-serif', fontWeight: 300 }}>Google Calendar · Live Sync</div>
         </div>
         <button
@@ -29,7 +29,7 @@ export default function CalendarPage() {
             borderRadius: 4,
           }}
         >
-          ← ZURÜCK
+          ← BACK
         </button>
       </div>
 
@@ -42,7 +42,7 @@ export default function CalendarPage() {
       </div>
 
       <div style={{ marginTop: 10, fontSize: 9, letterSpacing: 1.5, color: 'rgba(128,192,255,0.4)', textAlign: 'center' }}>
-        Oren kann über den Chat Termine erstellen · Änderungen hier reichen Google Calendar durch
+        Oren can create events via chat · Changes here write back to Google Calendar
       </div>
     </div>
   )

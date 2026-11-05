@@ -245,7 +245,7 @@ export default function TalkToOren(props: any) {
           results.push(`✓ ${action.kind === 'income' ? 'Einnahme' : 'Ausgabe'}: ${action.description} (${action.amount}€)`)
         } else if (action.type === 'add_food_note' && action.text) {
           await supabase.from('food_notes').insert({ user_id: userId, text: action.text })
-          results.push(`✓ Ernährung: ${action.text}`)
+          results.push(`✓ Nutrition: ${action.text}`)
         } else if (action.type === 'add_brain_dump' && action.text) {
           await supabase.from('brain_dump').insert({ user_id: userId, text: action.text })
           results.push(`✓ Brain Dump: ${action.text}`)

@@ -14,13 +14,13 @@ type Project = {
   created_at: string
 }
 
-const STATUSES = ['konzept', 'kauf', 'bau', 'vermietet', 'verkauft']
+const STATUSES = ['concept', 'purchase', 'build', 'rented', 'sold']
 const STATUS_COLORS: Record<string, string> = {
-  konzept:   '#80c0ff',
-  kauf:      '#fbbf24',
-  bau:       '#f97316',
-  vermietet: '#34d399',
-  verkauft:  '#a78bfa',
+  concept:  '#80c0ff',
+  purchase: '#fbbf24',
+  build:    '#f97316',
+  rented:   '#34d399',
+  sold:     '#a78bfa',
 }
 
 export default function RealEstate({ onBack }: any) {
@@ -59,7 +59,7 @@ export default function RealEstate({ onBack }: any) {
   }
 
   const deleteProject = async (id: string) => {
-    if (!confirm('Projekt wirklich löschen?')) return
+    if (!confirm('Really delete this project?')) return
     await supabase.from('real_estate_projects').delete().eq('id', id)
     load()
   }
@@ -75,11 +75,11 @@ export default function RealEstate({ onBack }: any) {
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, paddingBottom:14, borderBottom:'1px solid rgba(80,180,255,0.15)' }}>
         <div>
           <div style={{ fontSize:10, letterSpacing:3, color:'#80c0ff', marginBottom:4 }}>◆ REAL ESTATE</div>
-          <div style={{ fontSize:18, letterSpacing:1, color:'#f5f5f5', fontFamily:'Inter, sans-serif', fontWeight:300 }}>Projekte & Portfolio</div>
+          <div style={{ fontSize:18, letterSpacing:1, color:'#f5f5f5', fontFamily:'Inter, sans-serif', fontWeight:300 }}>Projects & Portfolio</div>
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <button onClick={() => setShowNew(true)} style={btnPrimary}>+ NEUES PROJEKT</button>
-          <button onClick={onBack} style={btnGhost}>← ZURÜCK</button>
+          <button onClick={() => setShowNew(true)} style={btnPrimary}>+ NEW PROJECT</button>
+          <button onClick={onBack} style={btnGhost}>← BACK</button>
         </div>
       </div>
 
@@ -101,11 +101,11 @@ export default function RealEstate({ onBack }: any) {
 
       {/* PROJECT LIST */}
       {loading ? (
-        <div style={{ fontSize:11, color:'rgba(128,192,255,0.4)', textAlign:'center', padding:40 }}>Lade Projekte...</div>
+        <div style={{ fontSize:11, color:'rgba(128,192,255,0.4)', textAlign:'center', padding:40 }}>Loading projects...</div>
       ) : projects.length === 0 && !showNew ? (
         <div style={{ textAlign:'center', padding:60, color:'rgba(128,192,255,0.5)', border:'1px dashed rgba(80,180,255,0.2)', borderRadius:8 }}>
-          <div style={{ fontSize:14, marginBottom:8 }}>Noch keine Projekte</div>
-          <div style={{ fontSize:11, letterSpacing:1 }}>Klick auf "+ NEUES PROJEKT" um das erste anzulegen</div>
+          <div style={{ fontSize:14, marginBottom:8 }}>No projects yet</div>
+          <div style={{ fontSize:11, letterSpacing:1 }}>Click "+ NEW PROJECT" to add the first one</div>
         </div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -192,14 +192,14 @@ function ProjectCard({ project, onEdit, onDelete }: any) {
 
 function ProjectForm({ initial, onCancel, onSave }: any) {
   const [name, setName] = useState(initial?.name || '')
-  const [status, setStatus] = useState(initial?.status || 'konzept')
+  const [status, setStatus] = useState(initial?.status || 'concept')
   const [location, setLocation] = useState(initial?.location || '')
   const [invested, setInvested] = useState(initial?.invested?.toString() || '')
   const [currentValue, setCurrentValue] = useState(initial?.current_value?.toString() || '')
   const [notes, setNotes] = useState(initial?.notes || '')
 
   const save = () => {
-    if (!name.trim()) return alert('Name ist Pflicht')
+    if (!name.trim()) return alert('Name is required')
     onSave({
       name: name.trim(),
       status,
@@ -213,16 +213,16 @@ function ProjectForm({ initial, onCancel, onSave }: any) {
   return (
     <div style={{ background:'rgba(10,20,35,0.7)', border:'1px solid rgba(80,180,255,0.3)', borderRadius:8, padding:18, marginBottom:12 }}>
       <div style={{ fontSize:10, letterSpacing:2.5, color:'#80c0ff', marginBottom:14 }}>
-        {initial ? '◆ PROJEKT BEARBEITEN' : '◆ NEUES PROJEKT'}
+        {initial ? '◆ EDIT PROJECT' : '◆ NEW PROJECT'}
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:12, marginBottom:10 }}>
-        <Field label="NAME" value={name} onChange={setName} placeholder="z.B. Villa Canggu North" />
+        <Field label="NAME" value={name} onChange={setName} placeholder="e.g. Villa Canggu North" />
         <Field label="STATUS" asSelect value={status} onChange={setStatus} options={STATUSES} />
       </div>
 
       <div style={{ marginBottom:10 }}>
-        <Field label="LOCATION" value={location} onChange={setLocation} placeholder="z.B. Bali · Canggu · Berawa" />
+        <Field label="LOCATION" value={location} onChange={setLocation} placeholder="e.g. Bali · Canggu · Berawa" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:10 }}>
@@ -231,12 +231,12 @@ function ProjectForm({ initial, onCancel, onSave }: any) {
       </div>
 
       <div style={{ marginBottom:14 }}>
-        <Field label="NOTIZEN" asTextarea value={notes} onChange={setNotes} placeholder="Freitext, Partner, Deadlines, Links ..." />
+        <Field label="NOTIZEN" asTextarea value={notes} onChange={setNotes} placeholder="Free text, partners, deadlines, links ..." />
       </div>
 
       <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-        <button onClick={onCancel} style={btnGhost}>ABBRECHEN</button>
-        <button onClick={save} style={btnPrimary}>{initial ? 'SPEICHERN' : 'ANLEGEN'}</button>
+        <button onClick={onCancel} style={btnGhost}>CANCEL</button>
+        <button onClick={save} style={btnPrimary}>{initial ? 'SAVE' : 'CREATE'}</button>
       </div>
     </div>
   )

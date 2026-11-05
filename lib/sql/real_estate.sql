@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS real_estate_projects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by uuid REFERENCES auth.users(id),
   name text NOT NULL,
-  status text NOT NULL DEFAULT 'konzept',
+  status text NOT NULL DEFAULT 'concept',
   location text,
   invested numeric DEFAULT 0,
   current_value numeric DEFAULT 0,

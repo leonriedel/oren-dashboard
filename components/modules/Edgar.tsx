@@ -150,7 +150,7 @@ export default function Edgar({ user, onBack }: Props) {
               ACTIVE TRADES
             </SectionTitle>
             {openTrades.length === 0 ? (
-              <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>Keine aktiven Trades</div>
+              <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No active trades</div>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {openTrades.map(t => (
@@ -189,7 +189,7 @@ export default function Edgar({ user, onBack }: Props) {
               </ItemRow>
             ))}
             {closedTrades.length === 0 && (
-              <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>Keine geschlossenen Trades</div>
+              <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No closed trades</div>
             )}
           </Card>
         </>
@@ -257,7 +257,7 @@ export default function Edgar({ user, onBack }: Props) {
             </div>
           ))}
           {signals.length === 0 && (
-            <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>Keine Signale</div>
+            <div style={{ color: 'rgba(110,231,183,0.55)', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No signals</div>
           )}
         </Card>
       )}

@@ -8,27 +8,27 @@ const CITIES = [
 ]
 
 const CODE_MAP: Record<number, { text: string; icon: string }> = {
-  0: { text: 'Klar', icon: '☀' },
-  1: { text: 'Fast klar', icon: '🌤' },
-  2: { text: 'Teils bewölkt', icon: '⛅' },
-  3: { text: 'Bewölkt', icon: '☁' },
-  45: { text: 'Nebel', icon: '🌫' },
-  48: { text: 'Nebel', icon: '🌫' },
-  51: { text: 'Nieselregen', icon: '🌦' },
-  53: { text: 'Nieselregen', icon: '🌦' },
-  55: { text: 'Starker Niesel', icon: '🌧' },
-  61: { text: 'Leichter Regen', icon: '🌧' },
-  63: { text: 'Regen', icon: '🌧' },
-  65: { text: 'Starker Regen', icon: '🌧' },
-  71: { text: 'Leichter Schnee', icon: '🌨' },
-  73: { text: 'Schnee', icon: '🌨' },
-  75: { text: 'Starker Schnee', icon: '❄' },
-  80: { text: 'Regenschauer', icon: '🌦' },
-  81: { text: 'Regenschauer', icon: '🌧' },
-  82: { text: 'Starke Schauer', icon: '⛈' },
-  95: { text: 'Gewitter', icon: '⛈' },
-  96: { text: 'Gewitter + Hagel', icon: '⛈' },
-  99: { text: 'Schweres Gewitter', icon: '⛈' }
+  0: { text: 'Clear', icon: '☀' },
+  1: { text: 'Mostly Clear', icon: '🌤' },
+  2: { text: 'Partly Cloudy', icon: '⛅' },
+  3: { text: 'Cloudy', icon: '☁' },
+  45: { text: 'Fog', icon: '🌫' },
+  48: { text: 'Fog', icon: '🌫' },
+  51: { text: 'Drizzle', icon: '🌦' },
+  53: { text: 'Drizzle', icon: '🌦' },
+  55: { text: 'Heavy Drizzle', icon: '🌧' },
+  61: { text: 'Light Rain', icon: '🌧' },
+  63: { text: 'Rain', icon: '🌧' },
+  65: { text: 'Heavy Rain', icon: '🌧' },
+  71: { text: 'Light Snow', icon: '🌨' },
+  73: { text: 'Snow', icon: '🌨' },
+  75: { text: 'Heavy Snow', icon: '❄' },
+  80: { text: 'Showers', icon: '🌦' },
+  81: { text: 'Showers', icon: '🌧' },
+  82: { text: 'Heavy Showers', icon: '⛈' },
+  95: { text: 'Thunderstorm', icon: '⛈' },
+  96: { text: 'Thunder + Hail', icon: '⛈' },
+  99: { text: 'Severe Storm', icon: '⛈' }
 }
 
 export async function GET(req: NextRequest) {
