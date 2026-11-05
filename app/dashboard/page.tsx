@@ -11,14 +11,13 @@ import News from '@/components/modules/News'
 import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
 import RealEstate from '@/components/modules/RealEstate'
-import TalkToOren from '@/components/modules/TalkToOren'
 import Weather from '@/components/modules/Weather'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
-type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'estate' | 'talk'
+type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'estate'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
@@ -56,9 +55,7 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
   const [time, setTime] = useState({ bali: '', de: '', date: '', mode: '' })
-  const [quickInput, setQuickInput] = useState('')
   const [orbState, setOrbState] = useState<OrbState>('idle')
-  const [quickResponse, setQuickResponse] = useState<string>('')
   const [priorities, setPriorities] = useState<Priority[]>([])
   const [events, setEvents] = useState<CalEvent[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
@@ -91,7 +88,7 @@ export default function Dashboard() {
       const b = new Date(n.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }))
       const d = new Date(n.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }))
       const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-      const months = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
       const fmt = (x: Date) => String(x.getHours()).padStart(2,'0') + ':' + String(x.getMinutes()).padStart(2,'0') + ':' + String(x.getSeconds()).padStart(2,'0')
       const h = d.getHours()
       const mode = h >= 22 || h < 6 ? 'NIGHT' : h < 12 ? 'MORNING' : h < 18 ? 'WORK' : 'EVENING'
@@ -106,26 +103,6 @@ export default function Dashboard() {
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [])
-
-  const sendQuick = useCallback(async () => {
-    if (!quickInput.trim()) return
-    setOrbState('thinking')
-    setQuickResponse('')
-    try {
-      const r = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: quickInput }] }),
-      })
-      const d = await r.json()
-      setQuickResponse(d.content || '...')
-      setOrbState('speaking')
-      setTimeout(() => setOrbState('idle'), 4500)
-    } catch {
-      setOrbState('idle')
-    }
-    setQuickInput('')
-  }, [quickInput])
 
   const logout = useCallback(async () => {
     const supabase = createClient()
@@ -147,7 +124,6 @@ export default function Dashboard() {
   if (screen === 'think')   return <ThinkSpace   user={user} onBack={() => setScreen('home')} />
   if (screen === 'sport')   return <Sport        user={user} onBack={() => setScreen('home')} />
   if (screen === 'estate')  return <RealEstate   user={user} onBack={() => setScreen('home')} />
-  if (screen === 'talk')    return <TalkToOren   user={user} onBack={() => setScreen('home')} />
 
   const stateLabel = orbState === 'thinking' ? 'PROCESSING'
                    : orbState === 'speaking' ? 'TRANSMITTING'
