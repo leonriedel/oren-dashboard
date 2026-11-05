@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 interface Props { user: User; onBack: () => void }
 
@@ -16,6 +17,7 @@ type Inv = {
 }
 
 export default function Investments({ user, onBack }: Props) {
+  const isMobile = useIsMobile()
   const supabase = createClient()
   const [cats, setCats] = useState<Cat[]>([])
   const [invs, setInvs] = useState<Inv[]>([])
@@ -137,9 +139,9 @@ export default function Investments({ user, onBack }: Props) {
         background: 'linear-gradient(135deg, rgba(80,160,255,0.06), rgba(40,100,200,0.10))',
         border: '1px solid rgba(80,180,255,0.20)',
         borderLeft: '2px solid var(--cyan)',
-        borderRadius: 4, padding: 24, marginBottom: 18,
+        borderRadius: 4, padding: isMobile ? 16 : 24, marginBottom: 18,
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: isMobile ? 16 : 32 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 3, color: 'var(--muted2)', marginBottom: 8 }}>TOTAL CURRENT</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 32, color: 'var(--cyan)', fontWeight: 700 }}>€{fmtEur(totalCurrent)}</div>
@@ -165,7 +167,7 @@ export default function Investments({ user, onBack }: Props) {
         </SectionTitle>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1.6fr 1fr 1fr 1fr 1fr',
+          gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1fr 1fr 1fr 1fr',
           gap: 14, padding: '8px 14px', alignItems: 'center',
           fontFamily: 'var(--mono)', fontSize: 12,
           background: 'rgba(4,28,20,0.45)', borderRadius: 3,

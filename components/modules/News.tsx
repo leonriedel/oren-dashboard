@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 interface Props { user: User; onBack: () => void }
 
@@ -10,6 +11,7 @@ type NewsItem = { source: string; headline: string; link: string; time: string; 
 type NewsData = { general?: NewsItem[]; business?: NewsItem[]; f1?: NewsItem[] }
 
 export default function News({ user, onBack }: Props) {
+  const isMobile = useIsMobile()
   const [data, setData] = useState<NewsData>({})
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState<'all'|'general'|'business'|'f1'>('all')
@@ -59,11 +61,11 @@ export default function News({ user, onBack }: Props) {
       {loading ? (
         <Card>
           <div style={{ padding: 40, textAlign: 'center', color: 'rgba(120,180,230,0.55)', fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: 2 }}>
-            ◌ LADE FEEDS...
+            ◌ LOADING FEEDS...
           </div>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: activeFilter === 'all' ? '1fr 1fr 1fr' : '1fr', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : (activeFilter === 'all' ? '1fr 1fr 1fr' : '1fr'), gap: 18 }}>
           {categories
             .filter(c => activeFilter === 'all' || activeFilter === c.key)
             .map(cat => {

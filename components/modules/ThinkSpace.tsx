@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 type Board = {
   id: string
@@ -25,6 +26,7 @@ const PRESET_COLORS = ['#80c0ff', '#34d399', '#fbbf24', '#f97316', '#a78bfa', '#
 const PRESET_EMOJIS = ['📋','💡','🎯','🚀','📊','✍️','🌱','🧠','📅','🛠']
 
 export default function ThinkSpace({ onBack }: any) {
+  const isMobile = useIsMobile()
   const [boards, setBoards] = useState<Board[]>([])
   const [currentBoard, setCurrentBoard] = useState<Board | null>(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export default function ThinkSpace({ onBack }: any) {
 
   // ─── BOARDS GRID ──────────────────────────────────────────────
   return (
-    <div style={{ minHeight:'100vh', background:'#000', color:'#d0e5ff', padding:'20px 28px', fontFamily:'Space Mono, monospace' }}>
+    <div style={{ minHeight:'100vh', background:'#000', color:'#d0e5ff', padding: isMobile ? '14px 14px 80px' : '20px 28px', fontFamily:'Space Mono, monospace' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:22, paddingBottom:14, borderBottom:'1px solid rgba(80,180,255,0.15)' }}>
         <div>
           <div style={{ fontSize:10, letterSpacing:3, color:'#80c0ff', marginBottom:4 }}>◇ THINKSPACE</div>

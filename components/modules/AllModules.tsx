@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useIsMobile } from '@/lib/useIsMobile'
 import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle, ItemRow, MetricGrid, FullBtn } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'

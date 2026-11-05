@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 type Project = {
   id: string
@@ -24,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function RealEstate({ onBack }: any) {
+  const isMobile = useIsMobile()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -71,7 +73,7 @@ export default function RealEstate({ onBack }: any) {
   const fmt = (n: number) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(n)
 
   return (
-    <div style={{ minHeight:'100vh', background:'#000', color:'#d0e5ff', padding:'20px 28px', fontFamily:'Space Mono, monospace' }}>
+    <div style={{ minHeight:'100vh', background:'#000', color:'#d0e5ff', padding: isMobile ? '14px 14px 80px' : '20px 28px', fontFamily:'Space Mono, monospace' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, paddingBottom:14, borderBottom:'1px solid rgba(80,180,255,0.15)' }}>
         <div>
           <div style={{ fontSize:10, letterSpacing:3, color:'#80c0ff', marginBottom:4 }}>◆ REAL ESTATE</div>
@@ -84,7 +86,7 @@ export default function RealEstate({ onBack }: any) {
       </div>
 
       {/* SUMMARY */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:20 }}>
+      <div style={{ display:'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap:12, marginBottom:20 }}>
         <Stat label="PROJEKTE" value={String(projects.length).padStart(2,'0')} />
         <Stat label="INVESTIERT" value={`€ ${fmt(totalInvested)}`} />
         <Stat label="AKTUELLER WERT" value={`€ ${fmt(totalValue)}`} color="#34d399" />

@@ -1,15 +1,17 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 export default function CalendarPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
 
   // Google embed — Leon's primary calendar. Timezone: Asia/Makassar.
   const email = 'leon@riedel.ai'
   const src = `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(email)}&ctz=Asia%2FMakassar&mode=WEEK&bgcolor=%23000000&color=%2380c0ff&showTitle=0&showPrint=0&showCalendars=0&showTz=1`
 
   return (
-    <div style={{ minHeight: '100vh', background: '#000', color: '#d0e5ff', padding: '20px 28px', fontFamily: 'Space Mono, monospace' }}>
+    <div style={{ minHeight: '100vh', background: '#000', color: '#d0e5ff', padding: isMobile ? '12px 10px' : '20px 28px', fontFamily: 'Space Mono, monospace' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid rgba(80,180,255,0.15)' }}>
         <div>
           <div style={{ fontSize: 10, letterSpacing: 3, color: '#80c0ff', marginBottom: 4 }}>◉ CALENDAR</div>
@@ -36,7 +38,7 @@ export default function CalendarPage() {
       <div style={{ background: 'rgba(5,10,18,0.75)', border: '1px solid rgba(80,180,255,0.15)', borderRadius: 8, padding: 2, overflow: 'hidden' }}>
         <iframe
           src={src}
-          style={{ border: 0, width: '100%', height: 'calc(100vh - 140px)', background: '#000', borderRadius: 6 }}
+          style={{ border: 0, width: '100%', height: isMobile ? 'calc(100vh - 160px)' : 'calc(100vh - 140px)', background: '#000', borderRadius: 6 }}
           title="Google Calendar"
         />
       </div>

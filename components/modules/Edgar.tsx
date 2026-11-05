@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle, ItemRow, MetricGrid } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 interface Props { user: User; onBack: () => void }
 
@@ -32,6 +33,7 @@ type EdgarData = {
 }
 
 export default function Edgar({ user, onBack }: Props) {
+  const isMobile = useIsMobile()
   const [data, setData] = useState<EdgarData | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'overview' | 'history' | 'signals'>('overview')
@@ -118,9 +120,9 @@ export default function Edgar({ user, onBack }: Props) {
         background: 'linear-gradient(135deg, rgba(16,185,129,0.06), rgba(5,150,105,0.10))',
         border: '1px solid rgba(16,185,129,0.25)',
         borderLeft: '2px solid #10b981',
-        borderRadius: 4, padding: 24, marginBottom: 18,
+        borderRadius: 4, padding: isMobile ? 16 : 24, marginBottom: 18,
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 32, alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: isMobile ? 18 : 32, alignItems: 'center' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: 3, color: '#6ee7b7', textTransform: 'uppercase', marginBottom: 10 }}>PORTFOLIO VALUE</div>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 38, fontWeight: 700, color: '#10b981', textShadow: '0 0 30px rgba(16,185,129,0.45)' }}>

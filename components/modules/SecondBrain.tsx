@@ -4,10 +4,12 @@ import { createClient } from '@/lib/supabase'
 import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle, ItemRow } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
+import { useIsMobile } from '@/lib/useIsMobile'
 
 interface Props { user: User; onBack: () => void }
 
 export default function SecondBrain({ user, onBack }: Props) {
+  const isMobile = useIsMobile()
   const supabase = createClient()
   const [prios, setPrios] = useState<any[]>([])
   const [goals, setGoals] = useState<any[]>([])
@@ -118,7 +120,7 @@ export default function SecondBrain({ user, onBack }: Props) {
         background: 'linear-gradient(135deg, rgba(80,160,255,0.06), rgba(40,100,200,0.10))',
         border: '1px solid rgba(80,180,255,0.20)',
         borderLeft: '2px solid #80c0ff',
-        borderRadius: 4, padding: 24, marginBottom: 18, position: 'relative',
+        borderRadius: 4, padding: isMobile ? 16 : 24, marginBottom: 18, position: 'relative',
       }}>
         <div style={{ position: 'absolute', top: 3, left: 3, width: 8, height: 8, borderTop: '1px solid rgba(120,200,255,0.5)', borderLeft: '1px solid rgba(120,200,255,0.5)' }} />
         <div style={{ position: 'absolute', top: 3, right: 3, width: 8, height: 8, borderTop: '1px solid rgba(120,200,255,0.5)', borderRight: '1px solid rgba(120,200,255,0.5)' }} />
@@ -126,13 +128,13 @@ export default function SecondBrain({ user, onBack }: Props) {
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 3, color: '#80c0ff', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#80c0ff', boxShadow: '0 0 8px #80c0ff' }} />
-              MISSION HEUTE
+              TODAY'S MISSION
             </div>
             <div style={{ fontSize: 20, fontWeight: 600, lineHeight: 1.4, marginBottom: 14, color: '#e0eeff' }}>
-              System aufbauen. Prozesse automatisieren. Fokus halten.
+              Build the system. Automate processes. Hold focus.
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {[['#fbbf24','ENERGIE: Hoch'],['#80c0ff','FOKUS: Deep Work'],['#34d399','MODUS: Builder']].map(([c,l]) => (
+              {[['#fbbf24','ENERGY: High'],['#80c0ff','FOCUS: Deep Work'],['#34d399','MODE: Builder']].map(([c,l]) => (
                 <div key={l} style={{
                   fontSize: 11, padding: '5px 13px', borderRadius: 2,
                   background: `${c}15`, color: c as string,
@@ -178,7 +180,7 @@ export default function SecondBrain({ user, onBack }: Props) {
       </div>
 
       {/* 3-COLUMN GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.1fr 1fr 1fr', gap: 18 }}>
 
         {/* COL 1 — TAGESPLAN */}
         <Card>
