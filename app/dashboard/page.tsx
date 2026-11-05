@@ -186,44 +186,68 @@ export default function Dashboard() {
         <CornerBracket pos="br" />
 
         {/* ═══ TOP BAR ═══ */}
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0,
-          padding: '14px 56px 14px 28px',
-          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr',
-          gap: 24, alignItems: 'center', zIndex: 20,
-          fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5,
-          color: '#7ea6d5',
-          backdropFilter: 'blur(12px)',
-          background: 'linear-gradient(180deg, rgba(0,8,24,0.9) 0%, rgba(0,8,24,0) 100%)',
-          borderBottom: '1px solid rgba(80,180,255,0.10)',
-        }}>
-          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <PulseDot color="#34d399" />
-              <span style={{ color: '#a0d0ff' }}>SYS ONLINE</span>
-            </div>
-            <span style={{ opacity: 0.55 }}>OREN v4.0</span>
-            <span style={{ opacity: 0.55 }}>{time.mode}</span>
-            <span style={{ color: '#7ea6d5' }}>{time.date}</span>
-          </div>
+        {isMobile ? (
           <div style={{
-            textAlign: 'center', color: '#80c0ff', fontSize: 12, letterSpacing: 6, fontWeight: 700,
-            display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
+            position: 'fixed', top: 0, left: 0, right: 0,
+            padding: '12px 16px', display: 'flex', alignItems: 'center',
+            justifyContent: 'space-between', gap: 10, zIndex: 20,
+            fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2,
+            color: '#7ea6d5',
+            backdropFilter: 'blur(12px)',
+            background: 'linear-gradient(180deg, rgba(0,8,24,0.95) 0%, rgba(0,8,24,0.6) 100%)',
+            borderBottom: '1px solid rgba(80,180,255,0.12)',
           }}>
-            <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
-            <span>WELCOME {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}</span>
-            <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <PulseDot color="#34d399" />
+              <span style={{ color: '#80c0ff', fontWeight: 700, letterSpacing: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ color: '#a0d0ff', fontSize: 11, letterSpacing: 1 }}>{time.bali}</span>
+              <button onClick={logout} style={{ ...btnExit, padding: '4px 10px', fontSize: 9 }}>EXIT</button>
+            </div>
           </div>
-          <div style={{ textAlign: 'right', display: 'flex', gap: 24, justifyContent: 'flex-end', alignItems: 'center' }}>
-            <TimeDisplay label="BALI" value={time.bali} />
-            <TimeDisplay label="BERLIN" value={time.de} />
-            <button onClick={logout} style={btnExit}>EXIT</button>
+        ) : (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0,
+            padding: '14px 56px 14px 28px',
+            display: 'grid', gridTemplateColumns: '1fr auto 1fr',
+            gap: 24, alignItems: 'center', zIndex: 20,
+            fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 2.5,
+            color: '#7ea6d5',
+            backdropFilter: 'blur(12px)',
+            background: 'linear-gradient(180deg, rgba(0,8,24,0.9) 0%, rgba(0,8,24,0) 100%)',
+            borderBottom: '1px solid rgba(80,180,255,0.10)',
+          }}>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <PulseDot color="#34d399" />
+                <span style={{ color: '#a0d0ff' }}>SYS ONLINE</span>
+              </div>
+              <span style={{ opacity: 0.55 }}>OREN v4.0</span>
+              <span style={{ opacity: 0.55 }}>{time.mode}</span>
+              <span style={{ color: '#7ea6d5' }}>{time.date}</span>
+            </div>
+            <div style={{
+              textAlign: 'center', color: '#80c0ff', fontSize: 12, letterSpacing: 6, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
+            }}>
+              <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
+              <span>WELCOME {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}</span>
+              <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
+            </div>
+            <div style={{ textAlign: 'right', display: 'flex', gap: 24, justifyContent: 'flex-end', alignItems: 'center' }}>
+              <TimeDisplay label="BALI" value={time.bali} />
+              <TimeDisplay label="BERLIN" value={time.de} />
+              <button onClick={logout} style={btnExit}>EXIT</button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ═══ MAIN GRID ═══ */}
         <div style={{
-          paddingTop: isMobile ? 120 : 64,
+          paddingTop: isMobile ? 70 : 64,
           paddingBottom: 24,
           paddingLeft: isMobile ? 12 : 24,
           paddingRight: isMobile ? 12 : 24,
@@ -235,8 +259,8 @@ export default function Dashboard() {
           zIndex: 5,
         }}>
 
-          {/* LEFT */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* LEFT (desktop only) */}
+          {!isMobile && (<div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Weather />
             <HUDPanel title="◉ UPCOMING" subtitle="3 DAYS">
               {(() => {
@@ -317,9 +341,10 @@ export default function Dashboard() {
                 ))
               )}
             </HUDPanel>
-          </div>
+          </div>)}
 
-          {/* CENTER */}
+          {/* CENTER (desktop only) */}
+          {!isMobile && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             justifyContent: 'flex-start', paddingTop: 0, position: 'relative',
@@ -384,7 +409,7 @@ export default function Dashboard() {
             </div>
 
             {/* Oren input bar removed; access the full chat via the HexButton or /talk route */}
-          </div>
+          </div>)}
 
           {/* RIGHT */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
