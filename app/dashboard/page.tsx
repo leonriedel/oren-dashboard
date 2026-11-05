@@ -135,15 +135,18 @@ export default function Dashboard() {
 
   if (!user) return null
 
+  // Role guards: viewer may not open edgar/investments
+  if ((screen === 'edgar' || screen === 'invest') && !isAdmin) {
+    setScreen('home'); return null
+  }
+
   if (screen === 'brain')   return <SecondBrain  user={user} onBack={() => setScreen('home')} />
-  if (screen === 'edgar') return <Edgar user={user} onBack={() => setScreen('home')} />
+  if (screen === 'edgar')   return <Edgar        user={user} onBack={() => setScreen('home')} />
   if (screen === 'invest')  return <Investments  user={user} onBack={() => setScreen('home')} />
   if (screen === 'news')    return <News         user={user} onBack={() => setScreen('home')} />
   if (screen === 'think')   return <ThinkSpace   user={user} onBack={() => setScreen('home')} />
   if (screen === 'sport')   return <Sport        user={user} onBack={() => setScreen('home')} />
   if (screen === 'estate')  return <RealEstate   user={user} onBack={() => setScreen('home')} />
-  if (screen === 'edgar' && !isAdmin)  { setScreen('home'); return null }
-  if (screen === 'invest' && !isAdmin) { setScreen('home'); return null }
   if (screen === 'talk')    return <TalkToOren   user={user} onBack={() => setScreen('home')} />
 
   const stateLabel = orbState === 'thinking' ? 'PROCESSING'

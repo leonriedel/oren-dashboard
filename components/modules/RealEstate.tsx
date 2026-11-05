@@ -114,7 +114,7 @@ export default function RealEstate({ onBack }: any) {
               key={p.id}
               initial={p}
               onCancel={() => setEditingId(null)}
-              onSave={(fields) => updateProject(p.id, fields)}
+              onSave={(fields: Partial<Project>) => updateProject(p.id, fields)}
             />
           ) : (
             <ProjectCard
