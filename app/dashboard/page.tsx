@@ -10,14 +10,15 @@ import Investments from '@/components/modules/Investments'
 import News from '@/components/modules/News'
 import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
-import SocialMedia from '@/components/modules/SocialMedia'
+import RealEstate from '@/components/modules/RealEstate'
 import TalkToOren from '@/components/modules/TalkToOren'
 import Weather from '@/components/modules/Weather'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { useRole } from '@/lib/useRole'
 
-type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'social' | 'talk'
+type Screen = 'home' | 'brain' | 'edgar' | 'invest' | 'news' | 'think' | 'sport' | 'estate' | 'talk'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 type Priority = { id: string; text: string; done: boolean }
@@ -50,6 +51,8 @@ function getTimeFromEvent(e: CalEvent): string {
 export default function Dashboard() {
   const router = useRouter()
   const isMobile = useIsMobile()
+  const { role, name: userName } = useRole()
+  const isAdmin = role === 'admin'
   const [user, setUser] = useState<User | null>(null)
   const [screen, setScreen] = useState<Screen>('home')
   const [time, setTime] = useState({ bali: '', de: '', date: '', mode: '' })
@@ -138,7 +141,9 @@ export default function Dashboard() {
   if (screen === 'news')    return <News         user={user} onBack={() => setScreen('home')} />
   if (screen === 'think')   return <ThinkSpace   user={user} onBack={() => setScreen('home')} />
   if (screen === 'sport')   return <Sport        user={user} onBack={() => setScreen('home')} />
-  if (screen === 'social')  return <SocialMedia  user={user} onBack={() => setScreen('home')} />
+  if (screen === 'estate')  return <RealEstate   user={user} onBack={() => setScreen('home')} />
+  if (screen === 'edgar' && !isAdmin)  { setScreen('home'); return null }
+  if (screen === 'invest' && !isAdmin) { setScreen('home'); return null }
   if (screen === 'talk')    return <TalkToOren   user={user} onBack={() => setScreen('home')} />
 
   const stateLabel = orbState === 'thinking' ? 'PROCESSING'
@@ -147,14 +152,14 @@ export default function Dashboard() {
                    : 'STANDBY'
 
   const modules = [
-    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center' },
-    { id: 'edgar', key: '02', label: 'EDGAR',       sub: 'Autonomous Trading' },
-    { id: 'invest',  key: '03', label: 'INVESTMENTS', sub: 'Portfolio & Returns' },
-    { id: 'news',    key: '04', label: 'NEWS',        sub: 'Intel & Headlines' },
-    { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think' },
-    { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance' },
-    { id: 'social',  key: '07', label: 'SOCIAL MEDIA', sub: 'Content & Growth' },
-    { id: 'calendar', key: '08', label: 'KALENDER', sub: 'Google Calendar Live' },
+    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: false },
+    { id: 'edgar',   key: '02', label: 'EDGAR',       sub: 'Autonomous Trading',   locked: !isAdmin },
+    { id: 'invest',  key: '03', label: 'INVESTMENTS', sub: 'Portfolio & Returns',  locked: !isAdmin },
+    { id: 'news',    key: '04', label: 'NEWS',        sub: 'Intel & Headlines',    locked: false },
+    { id: 'think',   key: '05', label: 'THINKSPACE',  sub: 'Strategy & Deep Think',locked: false },
+    { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance',   locked: false },
+    { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projekte & Portfolio', locked: false },
+    { id: 'calendar',key: '08', label: 'KALENDER',    sub: 'Google Calendar Live', locked: false },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -213,7 +218,7 @@ export default function Dashboard() {
             display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'center',
           }}>
             <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
-            <span>WILLKOMMEN LEON RIEDEL</span>
+            <span>WILLKOMMEN {(userName || 'LEON').toUpperCase()}{role === 'viewer' ? ' · VIEWER' : ''}</span>
             <span style={{ color: 'rgba(120,180,230,0.5)', fontSize: 10 }}>◆</span>
           </div>
           <div style={{ textAlign: 'right', display: 'flex', gap: 24, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -436,10 +441,15 @@ export default function Dashboard() {
             {modules.map(m => (
               <HexButton
                 key={m.id}
-                onClick={() => m.id === 'calendar' ? router.push('/dashboard/calendar') : setScreen(m.id as Screen)}
+                onClick={() => {
+                  if (m.locked) return
+                  if (m.id === 'calendar') router.push('/dashboard/calendar')
+                  else setScreen(m.id as Screen)
+                }}
                 k={m.key}
                 label={m.label}
                 sub={m.sub}
+                locked={m.locked}
               />
             ))}
 
@@ -584,36 +594,51 @@ function Tele({ label, value, green }: any) {
   )
 }
 
-function HexButton({ k, label, sub, onClick }: any) {
+function HexButton({ k, label, sub, onClick, locked }: any) {
+  const [showLockHint, setShowLockHint] = useState(false)
   return (
-    <button onClick={onClick}
+    <button onClick={() => {
+        if (locked) {
+          setShowLockHint(true)
+          setTimeout(() => setShowLockHint(false), 2200)
+          return
+        }
+        onClick()
+      }}
       onMouseEnter={(e: any) => {
+        if (locked) return
         e.currentTarget.style.borderColor = 'rgba(120,200,255,0.45)'
         e.currentTarget.style.background = 'rgba(20,40,80,0.8)'
         e.currentTarget.style.transform = 'translateX(-3px)'
       }}
       onMouseLeave={(e: any) => {
+        if (locked) return
         e.currentTarget.style.borderColor = 'rgba(80,180,255,0.15)'
         e.currentTarget.style.background = 'rgba(8,20,48,0.55)'
         e.currentTarget.style.transform = 'translateX(0)'
       }}
       style={{
-        background: 'rgba(8,20,48,0.55)',
+        background: locked ? 'rgba(8,20,48,0.3)' : 'rgba(8,20,48,0.55)',
         border: '1px solid rgba(80,180,255,0.15)',
-        borderLeft: '2px solid rgba(120,200,255,0.5)',
+        borderLeft: locked ? '2px solid rgba(255,180,100,0.35)' : '2px solid rgba(120,200,255,0.5)',
         borderRadius: 2, padding: '11px 14px',
-        cursor: 'pointer', width: '100%', textAlign: 'left',
+        cursor: locked ? 'not-allowed' : 'pointer', width: '100%', textAlign: 'left',
         transition: 'all 0.2s ease',
         backdropFilter: 'blur(8px)', position: 'relative',
+        opacity: locked ? 0.55 : 1,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: '#80c0ff', opacity: 0.7, fontWeight: 700, minWidth: 18 }}>{k}</div>
+        <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, color: locked ? 'rgba(255,180,100,0.7)' : '#80c0ff', opacity: 0.8, fontWeight: 700, minWidth: 18 }}>{k}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11.5, letterSpacing: 2.5, fontWeight: 700, color: '#bfdbfe' }}>{label}</div>
-          <div style={{ fontSize: 9.5, color: 'rgba(150,190,230,0.55)', marginTop: 1, letterSpacing: 0.5 }}>{sub}</div>
+          <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 11.5, letterSpacing: 2.5, fontWeight: 700, color: locked ? 'rgba(200,170,130,0.75)' : '#bfdbfe' }}>{label}</div>
+          <div style={{ fontSize: 9.5, color: 'rgba(150,190,230,0.55)', marginTop: 1, letterSpacing: 0.5 }}>
+            {showLockHint ? '🔒 Zugang verweigert — frag Leon' : sub}
+          </div>
         </div>
-        <div style={{ color: '#80c0ff', fontSize: 13, opacity: 0.5 }}>›</div>
+        <div style={{ color: locked ? 'rgba(255,180,100,0.65)' : '#80c0ff', fontSize: 13, opacity: locked ? 0.9 : 0.5 }}>
+          {locked ? '🔒' : '›'}
+        </div>
       </div>
     </button>
   )
