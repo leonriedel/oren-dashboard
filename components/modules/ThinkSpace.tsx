@@ -33,7 +33,12 @@ export default function ThinkSpace({ onBack }: any) {
   const supabase = createClient()
 
   const loadBoards = useCallback(async () => {
-    const { data: bs } = await supabase.from('workspace_boards').select('*').order('updated_at', { ascending: false })
+    const { data: bs, error } = await supabase.from('workspace_boards').select('*').order('updated_at', { ascending: false })
+    if (error) {
+      console.error('loadBoards error:', error)
+      setLoading(false)
+      return
+    }
     if (!bs) { setBoards([]); setLoading(false); return }
     // Fetch block counts
     const counts: Record<string, number> = {}
@@ -47,9 +52,19 @@ export default function ThinkSpace({ onBack }: any) {
 
   const createBoard = async (title: string, emoji: string, color: string) => {
     const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase.from('workspace_boards').insert({
+    const { data, error } = await supabase.from('workspace_boards').insert({
       title, emoji, color, created_by: user?.id
     }).select().single()
+    if (error) {
+      const msg = error.message || String(error)
+      if (msg.includes('relation') || msg.includes('does not exist')) {
+        alert('ThinkSpace tables not set up yet.\n\nRun lib/sql/thinkspace.sql in Supabase SQL editor once, then try again.')
+      } else {
+        alert('Create failed: ' + msg)
+      }
+      console.error('createBoard error:', error)
+      return
+    }
     setShowNew(false)
     if (data) setCurrentBoard(data as Board)
     loadBoards()
