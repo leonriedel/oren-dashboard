@@ -8,6 +8,7 @@ import WorkStream from '@/components/radar/WorkStream'
 import HeatList from '@/components/radar/HeatList'
 import MacroStrip from '@/components/radar/MacroStrip'
 import SectorHeat from '@/components/radar/SectorHeat'
+import IbkrPanel from '@/components/radar/IbkrPanel'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
@@ -137,6 +138,11 @@ export default function Radar() {
           <Stat label="ACTIVE MODELS" value="08" />
           <Stat label="ANOMALIES" value="23" color="#ffaa00" />
           <Stat label="DATA LAG" value="0.4s" color="#00ff41" />
+        </div>
+
+        {/* ═══ IBKR PORTFOLIO ═══ */}
+        <div style={{ marginBottom: 12 }}>
+          <IbkrPanel />
         </div>
 
         {/* ═══ MACRO STRIP ═══ */}
