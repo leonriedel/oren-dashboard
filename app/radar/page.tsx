@@ -6,7 +6,6 @@ import type { User } from '@supabase/supabase-js'
 import MatrixRain from '@/components/radar/MatrixRain'
 import WorkStream from '@/components/radar/WorkStream'
 import HeatList from '@/components/radar/HeatList'
-import { HOT_TICKERS, NICHE_PICKS, CRYPTO_HEAT } from '@/lib/radar/mockData'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
@@ -99,7 +98,7 @@ export default function Radar() {
             }} />
             <div>
               <div style={{ fontSize: 17, letterSpacing: 6, fontWeight: 700, color: '#a0ffa0', textShadow: '0 0 10px rgba(0,255,65,0.6)' }}>
-                OREN RADAR
+                RADAR AI
               </div>
               <div style={{ fontSize: 9, letterSpacing: 2.5, color: 'rgba(0,255,65,0.55)', marginTop: 2 }}>
                 MARKET INTELLIGENCE · MULTI-PLATFORM SCAN
@@ -158,13 +157,13 @@ export default function Radar() {
             minHeight: isMobile ? 'auto' : 0,
           }}>
             <div style={{ flex: '1 1 0', minHeight: isMobile ? 360 : 0 }}>
-              <HeatList title="TOP 10 HEATLIST" tickers={HOT_TICKERS} />
+              <HeatList title="TOP 10 HEATLIST" source="stocks" />
             </div>
             <div style={{ flex: '1 1 0', minHeight: isMobile ? 280 : 0 }}>
-              <HeatList title="NICHE PICKS" tickers={NICHE_PICKS} variant="niche" />
+              <HeatList title="NICHE PICKS" source="niche" variant="niche" />
             </div>
             <div style={{ flex: '0 1 auto' }}>
-              <HeatList title="CRYPTO HEAT" tickers={CRYPTO_HEAT} variant="crypto" />
+              <HeatList title="CRYPTO HEAT" source="crypto" variant="crypto" />
             </div>
           </div>
 
