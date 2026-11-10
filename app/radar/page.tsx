@@ -111,6 +111,8 @@ export default function Radar() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 10, letterSpacing: 2, color: 'rgba(0,255,65,0.7)' }}>
+            <MarketStatus />
+            <span style={{ color: 'rgba(0,255,65,0.4)' }}>|</span>
             <span>UTC+8 {time}</span>
             <span style={{ color: 'rgba(0,255,65,0.4)' }}>|</span>
             <span>{scanCount.toLocaleString('en-US')} SCANS/MIN</span>
@@ -221,6 +223,51 @@ function SourceBadge({ label, provider, live }: { label: string; provider: strin
       <span style={{ color: '#a0ffa0' }}>{label}</span>
       <span style={{ color: 'rgba(0,255,65,0.55)' }}>·</span>
       <span style={{ color }}>{live ? provider : 'mock'}</span>
+    </span>
+  )
+}
+
+
+function MarketStatus() {
+  const [label, setLabel] = useState<{ text: string; color: string; note: string }>({ text: '', color: '#60ff80', note: '' })
+  useEffect(() => {
+    const compute = () => {
+      // Compute NYSE session state from now in ET
+      const nowUtc = new Date()
+      // Convert to ET (America/New_York)
+      const et = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'America/New_York' }))
+      const day = et.getDay()  // 0=Sun, 6=Sat
+      const hh = et.getHours()
+      const mm = et.getMinutes()
+      const mins = hh * 60 + mm
+      const openMin = 9 * 60 + 30
+      const closeMin = 16 * 60
+      const preOpenMin = 4 * 60
+      const afterMax = 20 * 60
+      const weekend = day === 0 || day === 6
+      let out = { text: 'MARKET CLOSED', color: '#808080', note: 'weekend · last session shown' }
+      if (!weekend) {
+        if (mins >= openMin && mins < closeMin) out = { text: 'MARKET OPEN', color: '#00ff41', note: 'live intraday data' }
+        else if (mins >= preOpenMin && mins < openMin) out = { text: 'PRE-MARKET', color: '#ffaa00', note: 'quotes = last close · opens in ' + Math.floor((openMin - mins) / 60) + 'h ' + ((openMin - mins) % 60) + 'm' }
+        else if (mins >= closeMin && mins < afterMax) out = { text: 'AFTER-HOURS', color: '#ffaa00', note: 'quotes = regular session close' }
+        else out = { text: 'MARKET CLOSED', color: '#808080', note: 'quotes = last session close' }
+      }
+      setLabel(out)
+    }
+    compute()
+    const id = setInterval(compute, 60000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <span title={label.note} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '2px 8px', borderRadius: 2,
+      background: `${label.color}1a`, border: `1px solid ${label.color}66`, color: label.color,
+      fontWeight: 700,
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: label.color, boxShadow: `0 0 6px ${label.color}` }} />
+      US {label.text}
     </span>
   )
 }
