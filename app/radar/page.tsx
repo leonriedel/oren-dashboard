@@ -16,6 +16,7 @@ export default function Radar() {
   const [user, setUser] = useState<User | null>(null)
   const [time, setTime] = useState('')
   const [scanCount, setScanCount] = useState(0)
+  const [status, setStatus] = useState<{ finnhubConfigured: boolean } | null>(null)
   const isMobile = useIsMobile()
   const { role, loading: roleLoading } = useRole()
 
@@ -42,6 +43,7 @@ export default function Radar() {
     }
     tick()
     const id = setInterval(tick, 1000)
+    fetch('/api/radar/status').then(r => r.json()).then(setStatus).catch(() => {})
     return () => clearInterval(id)
   }, [])
 
@@ -186,15 +188,40 @@ export default function Radar() {
         {/* ═══ FOOTER TAPE ═══ */}
         <div style={{
           marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(0,255,65,0.15)',
-          display: 'flex', justifyContent: 'space-between',
-          fontSize: 9, letterSpacing: 2, color: 'rgba(0,255,65,0.45)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          fontSize: 9, letterSpacing: 2, color: 'rgba(0,255,65,0.55)',
+          flexWrap: 'wrap', gap: 10,
         }}>
-          <span>▸ v0.1 · mock data · hook real feeds next</span>
-          <span>USER: {user.email?.toUpperCase()}</span>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: '#80ff80' }}>▸ DATA SOURCES</span>
+            <SourceBadge label="CRYPTO" provider="CoinGecko" live={true} />
+            <SourceBadge label="STOCKS" provider="Finnhub"   live={!!status?.finnhubConfigured} />
+            <SourceBadge label="MACRO"  provider="Finnhub+CG" live={!!status?.finnhubConfigured} />
+            <SourceBadge label="SECTORS" provider="Finnhub (SPDR)" live={!!status?.finnhubConfigured} />
+            <SourceBadge label="NEWS"   provider="Finnhub"   live={!!status?.finnhubConfigured} />
+          </div>
+          <span style={{ color: 'rgba(0,255,65,0.4)' }}>USER: {user.email?.toUpperCase()}</span>
         </div>
 
       </div>
     </>
+  )
+}
+
+function SourceBadge({ label, provider, live }: { label: string; provider: string; live: boolean }) {
+  const color = live ? '#00ff41' : '#ffaa00'
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '2px 7px', borderRadius: 2,
+      background: live ? 'rgba(0,255,65,0.08)' : 'rgba(255,170,0,0.08)',
+      border: `1px solid ${live ? 'rgba(0,255,65,0.3)' : 'rgba(255,170,0,0.3)'}`,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: color }} />
+      <span style={{ color: '#a0ffa0' }}>{label}</span>
+      <span style={{ color: 'rgba(0,255,65,0.55)' }}>·</span>
+      <span style={{ color }}>{live ? provider : 'mock'}</span>
+    </span>
   )
 }
 
