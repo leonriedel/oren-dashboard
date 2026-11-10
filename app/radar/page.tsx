@@ -8,6 +8,7 @@ import WorkStream from '@/components/radar/WorkStream'
 import HeatList from '@/components/radar/HeatList'
 import { HOT_TICKERS, NICHE_PICKS, CRYPTO_HEAT } from '@/lib/radar/mockData'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { useRole } from '@/lib/useRole'
 
 export default function Radar() {
   const router = useRouter()
@@ -15,6 +16,14 @@ export default function Radar() {
   const [time, setTime] = useState('')
   const [scanCount, setScanCount] = useState(0)
   const isMobile = useIsMobile()
+  const { role, loading: roleLoading } = useRole()
+
+  // Admin-only: bounce viewers back to dashboard
+  useEffect(() => {
+    if (!roleLoading && role && role !== 'admin') {
+      router.replace('/dashboard')
+    }
+  }, [role, roleLoading, router])
 
   useEffect(() => {
     const supabase = createClient()
@@ -36,6 +45,7 @@ export default function Radar() {
   }, [])
 
   if (!user) return null
+  if (roleLoading || role !== 'admin') return null
 
   return (
     <>
