@@ -6,6 +6,8 @@ import type { User } from '@supabase/supabase-js'
 import MatrixRain from '@/components/radar/MatrixRain'
 import WorkStream from '@/components/radar/WorkStream'
 import HeatList from '@/components/radar/HeatList'
+import MacroStrip from '@/components/radar/MacroStrip'
+import SectorHeat from '@/components/radar/SectorHeat'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
@@ -133,26 +135,33 @@ export default function Radar() {
           <Stat label="DATA LAG" value="0.4s" color="#00ff41" />
         </div>
 
+        {/* ═══ MACRO STRIP ═══ */}
+        <div style={{ marginBottom: 12 }}>
+          <MacroStrip />
+        </div>
+
         {/* ═══ MAIN GRID ═══ */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 360px',
+          gridTemplateRows: isMobile ? 'auto' : 'minmax(0, 1fr) auto',
           gap: 12,
-          height: isMobile ? 'auto' : 'calc(100vh - 170px)',
+          minHeight: isMobile ? 'auto' : 'calc(100vh - 250px)',
         }}>
 
-          {/* Work Stream 1 */}
+          {/* Row 1: Work Stream 1 */}
           <div style={{ minHeight: isMobile ? 240 : 0 }}>
             <WorkStream label="STREAM-01 · MARKET + NEWS + SOCIAL" speedMs={280} maxLines={60} />
           </div>
 
-          {/* Work Stream 2 */}
+          {/* Row 1: Work Stream 2 */}
           <div style={{ minHeight: isMobile ? 240 : 0 }}>
             <WorkStream label="STREAM-02 · FLOW + OPTIONS + MACRO" speedMs={360} maxLines={60} />
           </div>
 
-          {/* Right: Top 10 + Niche + Crypto stacked */}
+          {/* Row 1+2: Right stack spans both rows */}
           <div style={{
+            gridRow: isMobile ? 'auto' : 'span 2',
             display: 'flex', flexDirection: 'column', gap: 10,
             minHeight: isMobile ? 'auto' : 0,
           }}>
@@ -165,6 +174,11 @@ export default function Radar() {
             <div style={{ flex: '0 1 auto' }}>
               <HeatList title="CRYPTO HEAT" source="crypto" variant="crypto" />
             </div>
+          </div>
+
+          {/* Row 2: Sector Heatmap spans 2 columns */}
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
+            <SectorHeat />
           </div>
 
         </div>
