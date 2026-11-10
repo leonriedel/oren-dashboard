@@ -12,6 +12,9 @@ type Position = {
   costBasis: number
   unrealizedPnl: number
   percentOfNAV: number
+  dailyChange?: number
+  dailyChangePct?: number
+  dailyPnl?: number
 }
 
 type AccountSummary = {
@@ -26,7 +29,7 @@ type AccountSummary = {
 export default function IbkrPanel() {
   const [positions, setPositions] = useState<Position[]>([])
   const [account, setAccount] = useState<AccountSummary>(null)
-  const [unrealizedTotal, setUnrealizedTotal] = useState(0)
+  const [dailyPnlTotal, setDailyPnlTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [updated, setUpdated] = useState<Date | null>(null)
@@ -42,7 +45,7 @@ export default function IbkrPanel() {
         else setError(null)
         setPositions(d.positions || [])
         setAccount(d.account || null)
-        setUnrealizedTotal(d.unrealizedTotal || 0)
+        setDailyPnlTotal(d.dailyPnlTotal || 0)
         setUpdated(new Date())
       } catch (e) {
         if (!abort) setError(String(e))
@@ -58,7 +61,8 @@ export default function IbkrPanel() {
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)
   const totalValue = account?.total || positions.reduce((s, p) => s + p.positionValue, 0)
-  const pnlColor = unrealizedTotal >= 0 ? '#00ff41' : '#ff5555'
+  const dailyPct = totalValue ? (dailyPnlTotal / totalValue) * 100 : 0
+  const pnlColor = dailyPnlTotal >= 0 ? '#00ff41' : '#ff5555'
 
   return (
     <div style={{
@@ -110,7 +114,11 @@ export default function IbkrPanel() {
           }}>
             <Cell label="NAV" value={`$${fmt(totalValue)}`} />
             <Cell label="POSITIONS" value={String(positions.length).padStart(2, '0')} />
-            <Cell label="UNREALIZED" value={`${unrealizedTotal >= 0 ? '+' : ''}$${fmt(unrealizedTotal)}`} color={pnlColor} />
+            <Cell
+              label="DAILY P&L"
+              value={`${dailyPnlTotal >= 0 ? '+' : ''}$${fmt(dailyPnlTotal)} · ${dailyPct >= 0 ? '+' : ''}${dailyPct.toFixed(2)}%`}
+              color={pnlColor}
+            />
           </div>
 
           {/* Position rows */}
@@ -127,7 +135,7 @@ export default function IbkrPanel() {
         fontSize: 8, letterSpacing: 2, color: 'rgba(0, 255, 65, 0.5)',
         display: 'flex', justifyContent: 'space-between',
       }}>
-        <span>▸ FLEX WEB SERVICE</span>
+        <span>▸ FLEX + FINNHUB DAILY</span>
         <span>{updated ? 'SYNC ' + updated.toLocaleTimeString('en-US', { hour12: false }) : '—'}</span>
       </div>
     </div>
@@ -144,8 +152,9 @@ function Cell({ label, value, color = '#e0ffe0' }: any) {
 }
 
 function PositionRow({ p }: { p: Position }) {
-  const pnlPct = p.costBasis ? (p.unrealizedPnl / Math.abs(p.costBasis)) * 100 : 0
-  const up = p.unrealizedPnl >= 0
+  const daily = p.dailyPnl || 0
+  const dpct  = p.dailyChangePct || 0
+  const up = daily >= 0
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(n)
   return (
     <div style={{
@@ -162,10 +171,10 @@ function PositionRow({ p }: { p: Position }) {
       </span>
       <span style={{ textAlign: 'right', color: '#e0ffe0' }}>${fmt(p.positionValue)}</span>
       <span style={{ textAlign: 'right', color: up ? '#00ff41' : '#ff5555', fontWeight: 700 }}>
-        {up ? '+' : ''}${fmt(p.unrealizedPnl)}
+        {up ? '+' : ''}${fmt(daily)}
       </span>
       <span style={{ textAlign: 'right', color: up ? '#00ff41' : '#ff5555', fontSize: 9 }}>
-        {up ? '+' : ''}{pnlPct.toFixed(1)}%
+        {up ? '+' : ''}{dpct.toFixed(2)}%
       </span>
     </div>
   )
