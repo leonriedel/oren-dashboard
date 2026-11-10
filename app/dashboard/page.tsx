@@ -147,7 +147,7 @@ export default function Dashboard() {
   const modules = [
     { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: false },
     { id: 'think',   key: '02', label: 'THINKSPACE',  sub: 'Shared Notes & Boards',locked: false },
-    { id: 'edgar',   key: '03', label: 'EDGAR',       sub: 'Autonomous Trading',   locked: !isAdmin },
+    { id: 'radar',   key: '03', label: 'OREN RADAR',  sub: 'Market Intelligence',  locked: !isAdmin },
     { id: 'invest',  key: '04', label: 'INVESTMENTS', sub: 'Portfolio & Returns',  locked: !isAdmin },
     { id: 'news',    key: '05', label: 'NEWS',        sub: 'Intel & Headlines',    locked: false },
     { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance',   locked: false },
@@ -428,6 +428,7 @@ export default function Dashboard() {
                 onClick={() => {
                   if (m.locked) return
                   if (m.id === 'calendar') router.push('/dashboard/calendar')
+                  else if (m.id === 'radar') router.push('/radar')
                   else setScreen(m.id as Screen)
                 }}
                 k={m.key}
