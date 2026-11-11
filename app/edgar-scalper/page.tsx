@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import useRole from '@/lib/useRole'
+import { useRole } from '@/lib/useRole'
 import MatrixRain from '@/components/radar/MatrixRain'
 import BotStatus from '@/components/edgar-scalper/BotStatus'
 import EquityStrip from '@/components/edgar-scalper/EquityStrip'

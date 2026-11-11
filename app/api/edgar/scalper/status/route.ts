@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY!
 
 export async function GET() {
   try {
-    const supa = createClient(URL, KEY)
+    const supa = createClient(SUPA_URL, KEY)
     const { data, error } = await supa
       .from('edgar_bot_status')
       .select('*')

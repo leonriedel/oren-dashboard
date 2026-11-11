@@ -5,3 +5,6 @@ node_modules/
 *.env
 .DS_Store
 Claude outputs/
+edgar-scalper/.env
+edgar-scalper/.venv/
+edgar-scalper/.env

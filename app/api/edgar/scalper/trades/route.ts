@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY!
 
 export async function GET(req: Request) {
   try {
     const u = new URL(req.url)
     const limit = Math.min(Number(u.searchParams.get('limit') || 20), 100)
-    const supa = createClient(URL, KEY)
+    const supa = createClient(SUPA_URL, KEY)
 
     // Closed trades (journal)
     const { data, error } = await supa
