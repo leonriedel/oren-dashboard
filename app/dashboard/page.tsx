@@ -153,6 +153,7 @@ export default function Dashboard() {
     { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance',   locked: false },
     { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projects & Portfolio', locked: false },
     { id: 'calendar',key: '08', label: 'CALENDAR',    sub: 'Google Calendar Live', locked: false },
+    { id: 'scalper', key: '09', label: 'EDGAR SCALPER', sub: 'XAU + FX Trend Scalper', locked: !isAdmin },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -419,7 +420,7 @@ export default function Dashboard() {
               justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>◇ MODULES</span>
-              <span style={{ color: '#34d399' }}>● 8/8 ACTIVE</span>
+              <span style={{ color: '#34d399' }}>● 9/9 ACTIVE</span>
             </div>
 
             {modules.map(m => (
@@ -429,6 +430,7 @@ export default function Dashboard() {
                   if (m.locked) return
                   if (m.id === 'calendar') router.push('/dashboard/calendar')
                   else if (m.id === 'radar') router.push('/radar')
+                  else if (m.id === 'scalper') router.push('/edgar-scalper')
                   else setScreen(m.id as Screen)
                 }}
                 k={m.key}
