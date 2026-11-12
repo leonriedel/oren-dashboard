@@ -50,7 +50,7 @@ export default function EdgarScalperPage() {
               EDGAR SCALPER
             </div>
             <div style={{ fontSize: 10, color: 'rgba(0,255,65,0.6)', letterSpacing: 2, marginTop: 4 }}>
-              XAU + FX · TREND SCALPER · BOLLINGER + RSI + MACD
+              XAU + FX · MEAN REVERSION · BOLLINGER + RSI
             </div>
           </div>
           <a href="/dashboard" style={{
