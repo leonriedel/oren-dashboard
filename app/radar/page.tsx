@@ -9,6 +9,7 @@ import HeatList from '@/components/radar/HeatList'
 import MacroStrip from '@/components/radar/MacroStrip'
 import SectorHeat from '@/components/radar/SectorHeat'
 import IbkrPanel from '@/components/radar/IbkrPanel'
+import HotPicks from '@/components/radar/HotPicks'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
@@ -143,6 +144,11 @@ export default function Radar() {
         {/* ═══ IBKR PORTFOLIO ═══ */}
         <div style={{ marginBottom: 12 }}>
           <IbkrPanel />
+        </div>
+
+        {/* ═══ HOT PICKS · AI ═══ */}
+        <div style={{ marginBottom: 12 }}>
+          <HotPicks />
         </div>
 
         {/* ═══ MACRO STRIP ═══ */}
