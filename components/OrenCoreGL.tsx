@@ -227,7 +227,7 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
     tilt.add(mainSpin)
 
     // Main wireframe
-    mainSpin.add(new THREE.LineSegments(track(latLongGeometry(R, 18, 12)), track(lineMat(0x64c8ff, 0.15))))
+    mainSpin.add(new THREE.LineSegments(track(latLongGeometry(R, 18, 12)), track(lineMat(0x64c8ff, 0.18))))
 
     // Vertex stars at intersections
     {
@@ -239,15 +239,15 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
           v.push(R * Math.cos(lat) * Math.cos(lon), R * Math.sin(lat), R * Math.cos(lat) * Math.sin(lon))
         }
       }
-      mainSpin.add(makePoints(new Float32Array(v), 0xe6f5ff, 2.5, 3.5, 0.5))
+      mainSpin.add(makePoints(new Float32Array(v), 0xe6f5ff, 2.5, 3.5, 0.62))
     }
 
     // Surface particle skin
-    mainSpin.add(makePoints(fibSphere(2600, R * 1.005), 0x9fd4ff, 0.9, 1.8, 0.28))
+    mainSpin.add(makePoints(fibSphere(2600, R * 1.005), 0x9fd4ff, 0.9, 1.8, 0.36))
 
     // Fresnel energy shell
     const shellMat = track(new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color(0x4aa8ff) }, uIntensity: { value: 0.32 }, uPower: { value: 3.2 } },
+      uniforms: { uColor: { value: new THREE.Color(0x4aa8ff) }, uIntensity: { value: 0.4 }, uPower: { value: 3.2 } },
       vertexShader: FRESNEL_VERT, fragmentShader: FRESNEL_FRAG,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
     }))
@@ -369,7 +369,7 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
     const core = new THREE.Mesh(track(new THREE.SphereGeometry(0.16, 32, 32)), track(new THREE.MeshBasicMaterial({ color: 0xcfeaff })))
     tilt.add(core)
     const coronaMat = track(new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color(0x8fd0ff) }, uIntensity: { value: 0.55 }, uPower: { value: 2.0 } },
+      uniforms: { uColor: { value: new THREE.Color(0x8fd0ff) }, uIntensity: { value: 0.68 }, uPower: { value: 2.0 } },
       vertexShader: FRESNEL_VERT, fragmentShader: FRESNEL_FRAG,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
     }))
@@ -444,7 +444,7 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
         v.randomDirection().multiplyScalar(R * (1.12 + Math.pow(Math.random(), 0.7) * 0.5))
         a.set([v.x, v.y, v.z], i * 3)
       }
-      field.add(makePoints(a, 0xbfe0ff, 0.7, 1.8, 0.35, R * 1.62))
+      field.add(makePoints(a, 0xbfe0ff, 0.7, 1.8, 0.44, R * 1.62))
     }
 
     // Free-floating line fragments
@@ -496,7 +496,7 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
     composer.setPixelRatio(pr)
     composer.setSize(size, size)
     composer.addPass(new RenderPass(scene, camera))
-    const bloom = new UnrealBloomPass(new THREE.Vector2(size, size), 0.4, 0.45, 0.22)
+    const bloom = new UnrealBloomPass(new THREE.Vector2(size, size), 0.5, 0.48, 0.2)
     composer.addPass(bloom)
     composer.addPass(new OutputPass())
     composer.addPass(new ShaderPass(LumaAlphaShader as any))
@@ -659,7 +659,7 @@ export default function OrenCoreGL({ orbState = 'idle', size = 860 }: { orbState
       }
 
       // Bloom reacts to state
-      const targetBloom = s === 'idle' ? 0.4 : s === 'thinking' ? 0.6 : s === 'speaking' ? 0.75 : 0.5
+      const targetBloom = s === 'idle' ? 0.5 : s === 'thinking' ? 0.72 : s === 'speaking' ? 0.88 : 0.6
       bloom.strength += (targetBloom + pulse * 0.05 - bloom.strength) * 0.05
 
       composer.render()
