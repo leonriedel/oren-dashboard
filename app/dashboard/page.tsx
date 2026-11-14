@@ -14,6 +14,8 @@ import RealEstate from '@/components/modules/RealEstate'
 import Weather from '@/components/modules/Weather'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
+import dynamic from 'next/dynamic'
+const OrenCoreGL = dynamic(() => import('@/components/OrenCoreGL'), { ssr: false })
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 
@@ -352,7 +354,9 @@ export default function Dashboard() {
           }}>
 
 <div style={{ position: 'relative', width: 620, height: 620, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <HUDCore orbState={orbState} size={620} />
+              <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}>
+                <OrenCoreGL orbState={orbState} size={860} />
+              </div>
             </div>
 
             <div style={{ textAlign: 'center', marginTop: -8, marginBottom: 20 }}>
