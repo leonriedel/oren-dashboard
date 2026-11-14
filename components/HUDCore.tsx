@@ -252,7 +252,6 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
     let t = 0
     let animId: number
-    let scanY = 0
 
     const draw = () => {
       t += 1
@@ -581,18 +580,6 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`; ctx.fill()
       }
 
-      // ═══ LAYER 11: SCANLINE SWEEP ═══
-      scanY = (scanY + 0.6 * stateMult) % size
-      const scanGrad = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30)
-      scanGrad.addColorStop(0, 'rgba(100, 200, 255, 0)')
-      scanGrad.addColorStop(0.5, 'rgba(140, 220, 255, 0.07)')
-      scanGrad.addColorStop(1, 'rgba(100, 200, 255, 0)')
-      ctx.fillStyle = scanGrad
-      ctx.fillRect(0, scanY - 30, size, 60)
-      // Thin bright scanline
-      ctx.fillStyle = 'rgba(180, 230, 255, 0.12)'
-      ctx.fillRect(0, scanY, size, 1)
-
       // ═══ LAYER 12: ROTATING HEX GLYPHS (outer edge) ═══
       glyphRefreshTimer++
       if (glyphRefreshTimer > 80) {
@@ -664,7 +651,14 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: size, height: size }}>
-      <canvas ref={canvasRef} style={{ display: 'block' }} />
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          WebkitMaskImage: 'radial-gradient(circle, black 55%, transparent 88%)',
+          maskImage: 'radial-gradient(circle, black 55%, transparent 88%)',
+        }}
+      />
     </div>
   )
 }
