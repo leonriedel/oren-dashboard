@@ -269,7 +269,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       const rx = -0.32 + mouseRef.current.y * -0.35
 
       // ═══ LAYER 1: AMBIENT NEBULA ═══
-      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.42)
+      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.36)
       ambient.addColorStop(0, `rgba(${DEEP.r}, ${DEEP.g}, ${DEEP.b}, ${0.13 + pulse * 0.08})`)
       ambient.addColorStop(0.3, `rgba(${MAGENTA.r}, 80, 180, ${0.04 + pulse * 0.03})`)
       ambient.addColorStop(0.6, `rgba(40, 80, 140, ${0.05 + pulse * 0.02})`)
@@ -613,6 +613,18 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       ctx.restore()
 
 
+      // ═══ FINAL MASK: clip everything to a soft circle (destination-in) ═══
+      // This guarantees no visible rectangular canvas edge.
+      ctx.save()
+      ctx.globalCompositeOperation = 'destination-in'
+      const maskGrad = ctx.createRadialGradient(cx, cy, size * 0.20, cx, cy, size * 0.48)
+      maskGrad.addColorStop(0, 'rgba(0,0,0,1)')
+      maskGrad.addColorStop(0.65, 'rgba(0,0,0,1)')
+      maskGrad.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = maskGrad
+      ctx.fillRect(0, 0, size, size)
+      ctx.restore()
+
       animId = requestAnimationFrame(draw)
     }
     draw()
@@ -624,15 +636,8 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
   }, [size])
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: size, height: size }}>
-      <canvas
-        ref={canvasRef}
-        style={{
-          display: 'block',
-          WebkitMaskImage: 'radial-gradient(circle, black 42%, rgba(0,0,0,0.5) 70%, transparent 95%)',
-          maskImage: 'radial-gradient(circle, black 42%, rgba(0,0,0,0.5) 70%, transparent 95%)',
-        }}
-      />
+    <div ref={containerRef} style={{ position: 'relative', width: size, height: size, background: 'transparent' }}>
+      <canvas ref={canvasRef} style={{ display: 'block', background: 'transparent' }} />
     </div>
   )
 }
