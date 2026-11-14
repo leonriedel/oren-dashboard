@@ -252,6 +252,24 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       })
     }
 
+    // ─── Free-floating line segments drifting in outer sphere area ───
+    type FreeLine = { x: number; y: number; angle: number; len: number; drift: number; life: number; maxLife: number }
+    const freeLines: FreeLine[] = []
+    const seedFreeLine = () => {
+      const r = size * (0.22 + Math.random() * 0.22)
+      const a = Math.random() * Math.PI * 2
+      freeLines.push({
+        x: cx + Math.cos(a) * r,
+        y: cy + Math.sin(a) * r,
+        angle: Math.random() * Math.PI * 2,
+        len: 10 + Math.random() * 28,
+        drift: (Math.random() - 0.5) * 0.4,
+        life: 0,
+        maxLife: 150 + Math.random() * 200,
+      })
+    }
+    for (let i = 0; i < 25; i++) seedFreeLine()
+
     // ─── Constellation lines: random faint connections between distant particles ───
     type ConstLine = { a: number; b: number; strength: number; maxLife: number }
     const constLines: ConstLine[] = []
@@ -884,6 +902,59 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.lineTo(bP.sx, bP.sy)
         ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.7 * fade})`
         ctx.lineWidth = 0.8
+        ctx.stroke()
+      }
+
+      // ═══ YELLOW ORBITAL MINI-STARS (extra bright accent) ═══
+      // Animate/render ~18 yellow mini-stars at random orbits around sphere
+      for (let yi = 0; yi < 18; yi++) {
+        const baseAngle = (yi / 18) * Math.PI * 2
+        const orbitR = shellR * (0.95 + (yi % 5) * 0.07)
+        const speed = 0.0025 + (yi % 3) * 0.0015
+        const tiltX = Math.sin(yi * 0.9) * 0.8
+        const a = baseAngle + t * (yi % 2 === 0 ? speed : -speed)
+        const px = Math.cos(a) * orbitR
+        const pz = Math.sin(a) * orbitR
+        const py = Math.sin(a * 2 + yi) * orbitR * 0.08
+        const tx = px, ty = py * Math.cos(tiltX) - pz * Math.sin(tiltX), tz = py * Math.sin(tiltX) + pz * Math.cos(tiltX)
+        const rotated = rot({ x: tx, y: ty, z: tz }, rx, ry)
+        const prj = project(rotated)
+        const depth = (-rotated.z / orbitR + 1) * 0.5
+        const r = 1.2 + depth * 1.2
+        const alpha = 0.4 + depth * 0.5
+        const g = ctx.createRadialGradient(prj.sx, prj.sy, 0, prj.sx, prj.sy, r * 5)
+        g.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${alpha})`)
+        g.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r * 5, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${alpha + 0.2})`
+        ctx.fill()
+      }
+
+      // ═══ FREE-FLOATING LINE SEGMENTS (around sphere, drifting) ═══
+      for (let li = freeLines.length - 1; li >= 0; li--) {
+        const ln = freeLines[li]
+        ln.life++
+        ln.angle += ln.drift * 0.015
+        ln.x += Math.cos(ln.angle) * 0.3
+        ln.y += Math.sin(ln.angle) * 0.3
+        const fade = ln.life < 25 ? ln.life / 25 : ln.life > ln.maxLife - 25 ? (ln.maxLife - ln.life) / 25 : 1
+        if (ln.life >= ln.maxLife) {
+          freeLines.splice(li, 1)
+          seedFreeLine()
+          continue
+        }
+        const x2 = ln.x + Math.cos(ln.angle) * ln.len
+        const y2 = ln.y + Math.sin(ln.angle) * ln.len
+        const alpha = 0.28 * fade
+        const grad = ctx.createLinearGradient(ln.x, ln.y, x2, y2)
+        grad.addColorStop(0, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
+        grad.addColorStop(0.5, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`)
+        grad.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
+        ctx.beginPath()
+        ctx.moveTo(ln.x, ln.y); ctx.lineTo(x2, y2)
+        ctx.strokeStyle = grad
+        ctx.lineWidth = 0.6
         ctx.stroke()
       }
 
