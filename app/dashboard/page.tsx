@@ -12,6 +12,7 @@ import ThinkSpace from '@/components/modules/ThinkSpace'
 import Sport from '@/components/modules/Sport'
 import RealEstate from '@/components/modules/RealEstate'
 import Weather from '@/components/modules/Weather'
+import MailPanel from '@/components/MailPanel'
 import HUDBackground from '@/components/HUDBackground'
 import HUDCore from '@/components/HUDCore'
 import dynamic from 'next/dynamic'
@@ -412,13 +413,7 @@ export default function Dashboard() {
               />
             ))}
 
-            <HUDPanel title="◇ TELEMETRY" subtitle="LIVE">
-              <Tele label="HEARTBEAT" value="30M" />
-              <Tele label="MODEL" value="HAIKU 4.5" />
-              <Tele label="LATENCY" value="42MS" green />
-              <Tele label="UPTIME" value="99.4%" green />
-              <Tele label="TOKENS" value="2.4K" />
-            </HUDPanel>
+            {isAdmin && <MailPanel />}
           </div>
         </div>
       </div>
