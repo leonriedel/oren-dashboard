@@ -651,19 +651,6 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       }
       ctx.restore()
 
-      // ═══ LAYER 15: CORNER BRACKETS ═══
-      const cornerR = size * 0.5 - 4
-      const cornerLen = 16
-      ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.45)`
-      ctx.lineWidth = 1.2
-      for (const [dx, dy] of [[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]) {
-        const x = cx + dx * cornerR, y = cy + dy * cornerR
-        ctx.beginPath()
-        ctx.moveTo(x, y + dy * -cornerLen)
-        ctx.lineTo(x, y)
-        ctx.lineTo(x + dx * -cornerLen, y)
-        ctx.stroke()
-      }
 
       animId = requestAnimationFrame(draw)
     }
