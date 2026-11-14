@@ -168,6 +168,14 @@ export default function Dashboard() {
   return (
     <>
       <HUDBackground />
+      <div style={{
+        position: 'fixed', left: 28, bottom: 22, zIndex: 30, pointerEvents: 'none',
+        fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: 4,
+        color: 'rgba(160, 205, 245, 0.55)',
+        textShadow: '0 0 12px rgba(100, 180, 255, 0.35)',
+      }}>
+        TRUST IN THE LAW!
+      </div>
 
       <div style={{
         minHeight: '100vh',
@@ -369,7 +377,7 @@ export default function Dashboard() {
               <div style={{
                 fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 6,
                 color: 'rgba(120,180,230,0.65)', marginTop: 4,
-              }}>● {stateLabel}</div>
+              }}>by Leon</div>
             </div>
 
             {/* Oren input bar removed; access the full chat via the HexButton or /talk route */}

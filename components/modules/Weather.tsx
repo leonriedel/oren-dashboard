@@ -15,9 +15,28 @@ type City = {
   isDay: boolean
 }
 
+const TZ: Record<string, string> = {
+  tallinn: 'Europe/Tallinn',
+  mallorca: 'Europe/Madrid',
+  canggu: 'Asia/Makassar',
+  wildeshausen: 'Europe/Berlin',
+}
+
+function localTime(id: string, now: Date) {
+  const tz = TZ[id]
+  if (!tz) return ''
+  return now.toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+}
+
 export default function Weather() {
   const [cities, setCities] = useState<City[]>([])
   const [loading, setLoading] = useState(true)
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 15_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     fetch('/api/weather')
@@ -136,15 +155,25 @@ export default function Weather() {
                 </div>
               </div>
 
-              <div style={{
-                fontFamily: 'monospace',
-                fontSize: 24,
-                fontWeight: 300,
-                color: city.home ? '#f5e6c0' : '#ffffff',
-                lineHeight: 1,
-                flexShrink: 0,
-              }}>
-                {city.temp}°
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: 24,
+                  fontWeight: 300,
+                  color: city.home ? '#f5e6c0' : '#ffffff',
+                  lineHeight: 1,
+                }}>
+                  {city.temp}°
+                </div>
+                <div style={{
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: city.home ? 'rgba(201, 169, 97, 0.75)' : 'rgba(128, 192, 255, 0.55)',
+                  lineHeight: 1,
+                }}>
+                  {localTime(city.id, now)}
+                </div>
               </div>
             </div>
           ))}
