@@ -155,7 +155,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     // ─── Neural nodes ───
     type Node = { x: number; y: number; z: number; r: number; activation: number; nextFire: number }
     const nodes: Node[] = []
-    const NODE_COUNT = 60
+    const NODE_COUNT = 85
     for (let i = 0; i < NODE_COUNT; i++) {
       let x = 0, y = 0, z = 0
       for (let t2 = 0; t2 < 20; t2++) {
@@ -173,7 +173,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         const dx=nodes[i].x-n.x, dy=nodes[i].y-n.y, dz=nodes[i].z-n.z
         return { j, d: Math.sqrt(dx*dx+dy*dy+dz*dz) }
       }).sort((a,b)=>a.d-b.d)
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < 4; k++) {
         const j = dists[k].j
         if (i < j) nEdges.push({ a: i, b: j, strength: 0 })
       }
@@ -182,9 +182,13 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     // ─── Orbital rings (3 rings at different 3D tilts) ───
     type Orbit = { tiltX: number; tiltZ: number; r: number; speed: number; particleCount: number; phase: number }
     const orbits: Orbit[] = [
-      { tiltX: 0.6, tiltZ: 0.3, r: shellR * 0.95, speed: 0.008, particleCount: 1, phase: 0 },
-      { tiltX: -0.4, tiltZ: 0.9, r: shellR * 1.02, speed: -0.006, particleCount: 1, phase: Math.PI/3 },
-      { tiltX: 0.9, tiltZ: -0.5, r: shellR * 1.10, speed: 0.010, particleCount: 1, phase: Math.PI/1.5 },
+      { tiltX: 0.6,  tiltZ: 0.3,  r: shellR * 0.95, speed: 0.008,  particleCount: 1, phase: 0 },
+      { tiltX: -0.4, tiltZ: 0.9,  r: shellR * 1.02, speed: -0.006, particleCount: 1, phase: Math.PI/3 },
+      { tiltX: 0.9,  tiltZ: -0.5, r: shellR * 1.10, speed: 0.010,  particleCount: 1, phase: Math.PI/1.5 },
+      { tiltX: 0.2,  tiltZ: 1.1,  r: shellR * 0.88, speed: -0.009, particleCount: 1, phase: Math.PI/2.1 },
+      { tiltX: -1.1, tiltZ: 0.4,  r: shellR * 1.05, speed: 0.007,  particleCount: 1, phase: Math.PI/0.7 },
+      { tiltX: 0.7,  tiltZ: -1.0, r: shellR * 0.98, speed: -0.011, particleCount: 1, phase: Math.PI/4.3 },
+      { tiltX: -0.8, tiltZ: -0.3, r: shellR * 1.07, speed: 0.012,  particleCount: 1, phase: Math.PI/1.8 },
     ]
 
     // ─── Floating ambient particles (orbit randomly) ───
@@ -229,6 +233,20 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         speed: 0.004 + Math.random() * 0.007,
       })
     }
+
+    // ─── Traveling impulses on neural edges ───
+    type Impulse = { edgeIdx: number; direction: 1 | -1; progress: number; speed: number }
+    const impulses: Impulse[] = []
+
+    // ─── Comets flying outside the sphere ───
+    type Comet = { angle: number; r: number; speed: number; trail: {x:number;y:number;a:number}[]; life: number; maxLife: number; tiltX: number; tiltZ: number }
+    const comets: Comet[] = []
+    let nextCometTime = 60
+
+    // ─── Energy arcs between random particle pairs (brief flashes) ───
+    type Arc = { pA: number; pB: number; life: number }
+    const arcs: Arc[] = []
+    let nextArcTime = 90
 
     // Rotation
     const rot = (p: V3, rx: number, ry: number): V3 => {
@@ -502,8 +520,17 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         nodes[i].activation = Math.max(0, nodes[i].activation - 0.02)
         if (nodes[i].nextFire <= 0) {
           nodes[i].activation = 1
-          nodes[i].nextFire = 80 + Math.random() * 260
-          for (const e of nEdges) if (e.a === i || e.b === i) e.strength = 1
+          nodes[i].nextFire = 50 + Math.random() * 180  // fire more often
+          for (let ei = 0; ei < nEdges.length; ei++) {
+            const e = nEdges[ei]
+            if (e.a === i) {
+              e.strength = 1
+              impulses.push({ edgeIdx: ei, direction: 1, progress: 0, speed: 0.02 + Math.random() * 0.025 })
+            } else if (e.b === i) {
+              e.strength = 1
+              impulses.push({ edgeIdx: ei, direction: -1, progress: 0, speed: 0.02 + Math.random() * 0.025 })
+            }
+          }
         }
       }
       for (const e of nEdges) e.strength = Math.max(0, e.strength - 0.025)
@@ -526,6 +553,28 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.lineWidth = 0.5 + e.strength * 1.3
         ctx.stroke()
       }
+      // Advance + draw traveling impulses
+      for (let ii = impulses.length - 1; ii >= 0; ii--) {
+        const imp = impulses[ii]
+        imp.progress += imp.speed * stateMult
+        if (imp.progress >= 1) { impulses.splice(ii, 1); continue }
+        const e = nEdges[imp.edgeIdx]
+        const nA = projNodes[e.a], nB = projNodes[e.b]
+        const fromA = imp.direction === 1
+        const tProg = imp.progress
+        const sx = fromA ? nA.sx + (nB.sx - nA.sx) * tProg : nB.sx + (nA.sx - nB.sx) * tProg
+        const sy = fromA ? nA.sy + (nB.sy - nA.sy) * tProg : nB.sy + (nA.sy - nB.sy) * tProg
+        const depth = (nA.depth + nB.depth) / 2
+        const r = 1.5 + depth * 1.5
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 4)
+        g.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`)
+        g.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
+        ctx.beginPath(); ctx.arc(sx, sy, r * 4, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`
+        ctx.fill()
+      }
+
       projNodes.sort((a, b) => a.depth - b.depth)
       for (const n of projNodes) {
         const r = n.r * n.projScale * (0.6 + n.depth * 0.7)
@@ -612,6 +661,95 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       }
       ctx.restore()
 
+
+      // ═══ LAYER X: COMETS (flying outside orbits) ═══
+      nextCometTime--
+      if (nextCometTime <= 0 && comets.length < 4) {
+        comets.push({
+          angle: Math.random() * Math.PI * 2,
+          r: shellR * (1.0 + Math.random() * 0.15),
+          speed: 0.012 + Math.random() * 0.012,
+          trail: [],
+          life: 0,
+          maxLife: 60 + Math.random() * 80,
+          tiltX: (Math.random() - 0.5) * 2,
+          tiltZ: (Math.random() - 0.5) * 2,
+        })
+        nextCometTime = 50 + Math.random() * 120
+      }
+      for (let ci = comets.length - 1; ci >= 0; ci--) {
+        const c = comets[ci]
+        c.life++
+        c.angle += c.speed * stateMult
+        if (c.life >= c.maxLife) { comets.splice(ci, 1); continue }
+        const px = Math.cos(c.angle) * c.r
+        const pz = Math.sin(c.angle) * c.r
+        const py = Math.sin(c.life * 0.03) * c.r * 0.08
+        const tx = px, ty = py * Math.cos(c.tiltX) - pz * Math.sin(c.tiltX), tz = py * Math.sin(c.tiltX) + pz * Math.cos(c.tiltX)
+        const rotated = rot({ x: tx, y: ty, z: tz }, rx, ry)
+        const prj = project(rotated)
+        c.trail.push({ x: prj.sx, y: prj.sy, a: 1 })
+        if (c.trail.length > 18) c.trail.shift()
+        // Draw trail
+        for (let ti = 0; ti < c.trail.length - 1; ti++) {
+          const t1 = c.trail[ti], t2 = c.trail[ti + 1]
+          const fade = (ti / c.trail.length) * (1 - c.life / c.maxLife)
+          ctx.beginPath()
+          ctx.moveTo(t1.x, t1.y); ctx.lineTo(t2.x, t2.y)
+          ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${fade * 0.7})`
+          ctx.lineWidth = 1.2 * fade
+          ctx.stroke()
+        }
+        // head
+        const headAlpha = 1 - c.life / c.maxLife
+        const g = ctx.createRadialGradient(prj.sx, prj.sy, 0, prj.sx, prj.sy, 6)
+        g.addColorStop(0, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.9 * headAlpha})`)
+        g.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, 6, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, 1.5, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${headAlpha})`
+        ctx.fill()
+      }
+
+      // ═══ LAYER Y: ENERGY ARCS (brief lightning between random particle pairs) ═══
+      nextArcTime--
+      if (nextArcTime <= 0 && arcs.length < 2) {
+        const pA = Math.floor(Math.random() * particles.length)
+        let pB = Math.floor(Math.random() * particles.length)
+        if (pB === pA) pB = (pB + 1) % particles.length
+        arcs.push({ pA, pB, life: 0 })
+        nextArcTime = 120 + Math.random() * 180
+      }
+      for (let ai = arcs.length - 1; ai >= 0; ai--) {
+        const a = arcs[ai]
+        a.life++
+        if (a.life > 20) { arcs.splice(ai, 1); continue }
+        const fade = 1 - a.life / 20
+        const pA = particles[a.pA], pB = particles[a.pB]
+        const projP = (p: typeof pA) => {
+          const px = Math.cos(p.angle) * p.distance
+          const pz = Math.sin(p.angle) * p.distance
+          const py = Math.sin(p.phase + t * 0.01) * p.distance * 0.1
+          const tx = px, ty = py * Math.cos(p.tiltX) - pz * Math.sin(p.tiltX), tz = py * Math.sin(p.tiltX) + pz * Math.cos(p.tiltX)
+          const rotated = rot({ x: tx, y: ty, z: tz }, rx, ry)
+          return project(rotated)
+        }
+        const aP = projP(pA), bP = projP(pB)
+        // Zigzag lightning path
+        ctx.beginPath()
+        ctx.moveTo(aP.sx, aP.sy)
+        const segs = 6
+        for (let i = 1; i < segs; i++) {
+          const tt = i / segs
+          const mx = aP.sx + (bP.sx - aP.sx) * tt + (Math.random() - 0.5) * 10
+          const my = aP.sy + (bP.sy - aP.sy) * tt + (Math.random() - 0.5) * 10
+          ctx.lineTo(mx, my)
+        }
+        ctx.lineTo(bP.sx, bP.sy)
+        ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.7 * fade})`
+        ctx.lineWidth = 0.8
+        ctx.stroke()
+      }
 
       // ═══ FINAL MASK: clip everything to a soft circle (destination-in) ═══
       // This guarantees no visible rectangular canvas edge.
