@@ -351,15 +351,7 @@ export default function Dashboard() {
             justifyContent: 'flex-start', paddingTop: 0, position: 'relative',
           }}>
 
-            <div style={{ display: 'flex', gap: 7, marginBottom: 8, fontFamily: 'Space Mono, monospace', fontSize: 9, letterSpacing: 1.5 }}>
-              <StatusPill label="CORE" value="OPS" color="#34d399" />
-              <StatusPill label="API" value="LIVE" color="#34d399" />
-              <StatusPill label="MEM" value="OK" color="#34d399" />
-              <StatusPill label="CRON" value="ARMED" color="#fbbf24" />
-              <StatusPill label="NEURAL" value="SYNC" color="#80c0ff" />
-            </div>
-
-            <div style={{ position: 'relative', width: 540, height: 540, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+<div style={{ position: 'relative', width: 620, height: 620, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <HUDCore orbState={orbState} size={620} />
 
               <div style={{
