@@ -2,16 +2,21 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/lib/useRole'
+import { createClient } from '@/lib/supabase'
 import NetWorthHero from '@/components/finance/NetWorthHero'
-import BucketCards from '@/components/finance/BucketCards'
+import LiveSourcesPanel from '@/components/finance/LiveSourcesPanel'
+import CategorySection from '@/components/finance/CategorySection'
 import EquityTrend from '@/components/finance/EquityTrend'
-import ManualEntriesEditor from '@/components/finance/ManualEntriesEditor'
 
 type Summary = {
   total_eur: number
-  buckets: any
-  sources: any
-  fx: { usd_eur: number; ts: number }
+  user_tracked: { invested: number; current: number; monthly: number; yearly: number }
+  live_sources: any
+  categories: Array<{
+    id: string; name: string; icon: string; sort_order: number
+    items: any[]; invested: number; current: number; monthly: number; yearly: number
+  }>
+  fx: any
   updatedAt: string
 }
 
@@ -21,12 +26,23 @@ export default function FinancePage() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [snapshotting, setSnapshotting] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [addingCat, setAddingCat] = useState(false)
+  const [newCatName, setNewCatName] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     const r = await fetch('/api/finance/summary', { cache: 'no-store' }).then(r => r.json()).catch(() => null)
     setSummary(r)
     setLoading(false)
+  }, [])
+
+  // Get current user id for API calls
+  useEffect(() => {
+    const supa = createClient()
+    supa.auth.getUser().then(({ data }) => {
+      setUserId(data?.user?.id || null)
+    })
   }, [])
 
   useEffect(() => {
@@ -46,8 +62,26 @@ export default function FinancePage() {
     await load()
   }
 
+  const addCategory = async () => {
+    if (!newCatName.trim()) return
+    await fetch('/api/finance/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: newCatName.trim(),
+        icon: '◆',
+        sort_order: (summary?.categories?.length || 0) + 10,
+        user_id: userId,
+      }),
+    })
+    setNewCatName(''); setAddingCat(false); load()
+  }
+
   if (roleLoading) return <div style={{ minHeight: '100vh', background: '#000' }} />
   if (role !== 'admin') return null
+
+  const sourcesTotal = summary?.live_sources?.total || 0
+  const grandTotal = summary?.total_eur || 0
 
   return (
     <div style={{
@@ -57,7 +91,6 @@ export default function FinancePage() {
       fontFamily: 'DM Sans, system-ui, sans-serif',
       position: 'relative',
     }}>
-      {/* Grid overlay */}
       <div style={{
         position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.4,
         backgroundImage: 'linear-gradient(rgba(80,180,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(80,180,255,0.035) 1px, transparent 1px)',
@@ -75,7 +108,7 @@ export default function FinancePage() {
               fontSize: 10, letterSpacing: 4, color: 'rgba(126,166,213,0.6)',
               fontFamily: 'Space Mono, monospace',
             }}>
-              ▸ MODULE 10
+              ▸ MODULE 04
             </div>
             <div style={{ fontSize: 28, fontWeight: 300, color: '#d8e9ff', letterSpacing: 2, marginTop: 4 }}>
               FINANCE
@@ -84,7 +117,7 @@ export default function FinancePage() {
               fontSize: 10, color: 'rgba(126,166,213,0.6)', letterSpacing: 2, marginTop: 4,
               fontFamily: 'Space Mono, monospace',
             }}>
-              NETWORTH · ACROSS ALL ASSETS · {summary ? new Date(summary.updatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}
+              NETWORTH · PORTFOLIO · RETURNS · {summary ? new Date(summary.updatedAt).toLocaleTimeString('en-US', { hour12: false }) : '—'}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -105,67 +138,92 @@ export default function FinancePage() {
         {/* HERO */}
         <div style={{ marginBottom: 16 }}>
           <NetWorthHero
-            total={summary?.total_eur || 0}
+            total={grandTotal}
+            monthly={(summary?.user_tracked?.monthly || 0) + (summary?.live_sources?.ibkr?.dailyPnl_eur || 0) * 21}
+            yearly={summary?.user_tracked?.yearly || 0}
             loading={loading}
           />
         </div>
 
-        {/* BUCKETS */}
+        {/* LIVE SOURCES */}
         <div style={{ marginBottom: 16 }}>
-          <BucketCards buckets={summary?.buckets || null} total={summary?.total_eur || 0} />
+          <LiveSourcesPanel sources={summary?.live_sources} grandTotal={grandTotal} />
         </div>
 
-        {/* TREND + MANUAL side-by-side */}
+        {/* CATEGORIES (user-tracked investments) */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)',
-          gap: 16,
-          marginBottom: 16,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          margin: '24px 0 12px', padding: '0 4px',
         }}>
-          <EquityTrend currentTotal={summary?.total_eur || 0} />
-          <ManualEntriesEditor onChange={load} />
+          <div style={{
+            fontSize: 10, letterSpacing: 4, color: 'rgba(126,166,213,0.6)',
+            fontFamily: 'Space Mono, monospace',
+          }}>
+            ▸ USER-TRACKED PORTFOLIO
+          </div>
+          {!addingCat ? (
+            <button onClick={() => setAddingCat(true)} style={{
+              background: 'rgba(80,180,255,0.1)', border: '1px solid rgba(80,180,255,0.3)',
+              color: '#7ea6d5', padding: '4px 12px', fontSize: 10, letterSpacing: 2,
+              fontFamily: 'Space Mono, monospace', cursor: 'pointer',
+            }}>+ CATEGORY</button>
+          ) : (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                autoFocus
+                placeholder="New category name"
+                value={newCatName}
+                onChange={e => setNewCatName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCategory()}
+                style={{
+                  background: 'rgba(80,180,255,0.05)',
+                  border: '1px solid rgba(80,180,255,0.3)',
+                  color: '#d8e9ff', padding: '3px 10px',
+                  fontFamily: 'Space Mono, monospace', fontSize: 11,
+                }}
+              />
+              <button onClick={addCategory} style={{
+                background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.4)',
+                color: '#34d399', padding: '3px 10px', fontSize: 10, letterSpacing: 2,
+                fontFamily: 'Space Mono, monospace', cursor: 'pointer',
+              }}>SAVE</button>
+              <button onClick={() => { setAddingCat(false); setNewCatName('') }} style={{
+                background: 'transparent', border: '1px solid rgba(248,113,113,0.3)',
+                color: 'rgba(248,113,113,0.7)', padding: '3px 10px', fontSize: 10,
+                fontFamily: 'Space Mono, monospace', cursor: 'pointer',
+              }}>×</button>
+            </div>
+          )}
         </div>
 
-        {/* SOURCES STATUS */}
-        {summary?.sources && (
+        {(summary?.categories || []).length === 0 && !loading && (
           <div style={{
-            padding: '10px 14px',
+            padding: 24, textAlign: 'center',
             background: 'rgba(0,10,25,0.5)',
-            border: '1px solid rgba(80,180,255,0.1)',
+            border: '1px dashed rgba(80,180,255,0.2)',
+            color: 'rgba(126,166,213,0.6)', fontSize: 11,
             fontFamily: 'Space Mono, monospace',
-            fontSize: 10,
-            color: 'rgba(126,166,213,0.7)',
-            letterSpacing: 1.5,
-            display: 'flex', gap: 24, flexWrap: 'wrap',
           }}>
-            <span>▸ SOURCES</span>
-            <Source label="IBKR" ok={summary.sources.ibkr?.available}
-              detail={summary.sources.ibkr?.available ? `${summary.sources.ibkr.positions} pos · ${summary.sources.ibkr.currency}` : 'offline'}
-            />
-            <Source label="EDGAR" ok={summary.sources.edgar?.available}
-              detail={summary.sources.edgar?.available ? (summary.sources.edgar.dry_run ? 'paper' : 'live') : 'no data'}
-            />
-            <Source label="REAL ESTATE" ok={summary.sources.realEstate?.projects > 0}
-              detail={`${summary.sources.realEstate?.projects || 0} projects`}
-            />
-            <Source label="MANUAL" ok={summary.sources.manualCount > 0}
-              detail={`${summary.sources.manualCount || 0} entries`}
-            />
-            <span style={{ marginLeft: 'auto' }}>FX USD→EUR: {summary.fx?.usd_eur?.toFixed(4) || '—'}</span>
+            Keine Kategorien · klick "+ CATEGORY" um deine erste anzulegen<br />
+            Beispiele: "Crypto", "Cash", "Stocks Portfolio", "Bonds", "Collectibles"
           </div>
         )}
+
+        {(summary?.categories || []).map(cat => (
+          <CategorySection
+            key={cat.id}
+            category={cat}
+            grandTotal={grandTotal}
+            userId={userId || ''}
+            onChange={load}
+          />
+        ))}
+
+        {/* EQUITY TREND */}
+        <div style={{ marginTop: 24 }}>
+          <EquityTrend currentTotal={grandTotal} />
+        </div>
       </div>
     </div>
-  )
-}
-
-function Source({ label, ok, detail }: any) {
-  const col = ok ? '#34d399' : 'rgba(126,166,213,0.4)'
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: col, boxShadow: `0 0 4px ${col}` }} />
-      <span style={{ color: '#d8e9ff' }}>{label}</span>
-      <span style={{ color: 'rgba(126,166,213,0.6)' }}>· {detail}</span>
-    </span>
   )
 }

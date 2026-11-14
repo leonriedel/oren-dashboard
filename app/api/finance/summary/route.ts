@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// FINANCE SUMMARY
-// Aggregates NAV across IBKR (via Flex), Edgar (paper + live), Real Estate,
-// and user-entered Manual Entries. Returns totals per bucket + total NAV in EUR.
+// FINANCE SUMMARY v2
+// Aggregates everything into one view:
+// - investments_v2 (user-maintained investments across categories)
+// - IBKR Flex (auto-pull)
+// - Edgar (live NAV)
+// - Real Estate
 //
-// All manual entries are stored in EUR already. IBKR comes in account currency
-// (often EUR for Leon). Edgar paper NAV is in USD → convert via ECB rate.
+// All totals in EUR. USD values converted via exchangerate.host.
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const KEY      = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY!
 
-// cached FX rate for a few hours
 let _fx: { ts: number; usd_eur: number } = { ts: 0, usd_eur: 0.92 }
 async function usdToEur(): Promise<number> {
   const now = Date.now()
@@ -39,19 +40,17 @@ export async function GET(req: Request) {
     const supa = createClient(SUPA_URL, KEY)
     const fx = await usdToEur()
 
-    // 1. MANUAL ENTRIES (EUR)
-    const { data: manual = [] } = await supa
-      .from('finance_manual_entries')
+    // 1. INVESTMENTS from investments_v2 (user-maintained CRUD)
+    const { data: cats = [] } = await supa
+      .from('investment_categories')
       .select('*')
-      .order('bucket')
-    const manualByBucket: Record<string, { label: string; amount_eur: number }[]> = {
-      liquid: [], investments: [], physical: [], other: [],
-    }
-    for (const m of manual || []) {
-      (manualByBucket[m.bucket] ||= []).push({ label: m.label, amount_eur: Number(m.amount_eur) })
-    }
+      .order('sort_order')
+    const { data: items = [] } = await supa
+      .from('investments_v2')
+      .select('*')
+      .order('created_at')
 
-    // 2. IBKR — call our own flex route
+    // 2. IBKR
     let ibkr = { total_eur: 0, dailyPnl_eur: 0, positions: 0, currency: 'EUR', available: false }
     try {
       const j = await fetchJSON(`${origin}/api/ibkr/flex`)
@@ -63,13 +62,12 @@ export async function GET(req: Request) {
           total_eur,
           dailyPnl_eur: Number(j?.dailyPnlTotal || 0) * (currency === 'EUR' ? 1 : fx),
           positions: Array.isArray(j?.positions) ? j.positions.length : 0,
-          currency,
-          available: true,
+          currency, available: true,
         }
       }
     } catch { /* skip */ }
 
-    // 3. EDGAR — latest equity snapshot
+    // 3. EDGAR
     let edgar = { nav_eur: 0, dry_run: true, available: false }
     try {
       const { data: eq } = await supa
@@ -79,88 +77,85 @@ export async function GET(req: Request) {
         .limit(1)
       if (eq && eq[0]) {
         edgar = {
-          nav_eur: Number(eq[0].nav) * fx,   // edgar logs in USD
+          nav_eur: Number(eq[0].nav) * fx,
           dry_run: !!eq[0].dry_run,
           available: true,
         }
       }
     } catch { /* table may not exist */ }
 
-    // 4. REAL ESTATE — sum current_value
+    // 4. REAL ESTATE
     let realEstate = { total_eur: 0, projects: 0 }
     try {
       const { data: re } = await supa
         .from('real_estate_projects')
-        .select('current_value,status')
+        .select('current_value')
       const sum = (re || []).reduce((s, p: any) => s + (Number(p.current_value) || 0), 0)
       realEstate = { total_eur: sum, projects: (re || []).length }
     } catch { /* table may not exist */ }
 
-    // ── AGGREGATE ──
-    const buckets = {
-      liquid: {
-        items: [
-          ...manualByBucket.liquid,
-        ],
-        total: manualByBucket.liquid.reduce((s, i) => s + i.amount_eur, 0),
-      },
-      investments: {
-        items: [
-          ...(ibkr.available ? [{ label: 'IBKR', amount_eur: ibkr.total_eur }] : []),
-          ...(edgar.available ? [{ label: edgar.dry_run ? 'Edgar (Paper)' : 'Edgar', amount_eur: edgar.nav_eur }] : []),
-          ...manualByBucket.investments,
-        ],
-        total: 0,
-      },
-      physical: {
-        items: [
-          ...(realEstate.total_eur > 0 ? [{ label: `Real Estate (${realEstate.projects})`, amount_eur: realEstate.total_eur }] : []),
-          ...manualByBucket.physical,
-        ],
-        total: 0,
-      },
-      other: {
-        items: manualByBucket.other,
-        total: manualByBucket.other.reduce((s, i) => s + i.amount_eur, 0),
-      },
-    }
-    buckets.investments.total = buckets.investments.items.reduce((s, i) => s + i.amount_eur, 0)
-    buckets.physical.total = buckets.physical.items.reduce((s, i) => s + i.amount_eur, 0)
+    // ── Aggregate per category ──
+    const categories = (cats || []).map((c: any) => {
+      const catItems = (items || []).filter((i: any) => i.category === c.name)
+      const invested = catItems.reduce((s, i: any) => s + Number(i.invested || 0), 0)
+      const current = catItems.reduce((s, i: any) => s + Number(i.current_value || 0), 0)
+      const monthly = catItems.reduce((s, i: any) => s + Number(i.monthly_return || 0), 0)
+      const yearly = catItems.reduce((s, i: any) => s + Number(i.yearly_return || 0), 0)
+      return {
+        id: c.id, name: c.name, icon: c.icon, sort_order: c.sort_order,
+        items: catItems, invested, current, monthly, yearly,
+      }
+    })
 
-    const total = buckets.liquid.total + buckets.investments.total + buckets.physical.total + buckets.other.total
+    const userInvestedTotal = (items || []).reduce((s, i: any) => s + Number(i.invested || 0), 0)
+    const userCurrentTotal  = (items || []).reduce((s, i: any) => s + Number(i.current_value || 0), 0)
+    const userMonthlyTotal  = (items || []).reduce((s, i: any) => s + Number(i.monthly_return || 0), 0)
+    const userYearlyTotal   = (items || []).reduce((s, i: any) => s + Number(i.yearly_return || 0), 0)
+
+    // Live sources totals
+    const liveTotal = ibkr.total_eur + edgar.nav_eur + realEstate.total_eur
+
+    // Grand total: user-tracked items + live auto-pulled
+    const total = userCurrentTotal + liveTotal
 
     return NextResponse.json({
       total_eur: total,
-      buckets,
-      sources: {
-        ibkr, edgar, realEstate,
-        manualCount: (manual || []).length,
+      user_tracked: {
+        invested: userInvestedTotal,
+        current: userCurrentTotal,
+        monthly: userMonthlyTotal,
+        yearly: userYearlyTotal,
       },
+      live_sources: {
+        total: liveTotal,
+        ibkr, edgar, realEstate,
+      },
+      categories,
       fx: { usd_eur: fx, ts: _fx.ts },
       updatedAt: new Date().toISOString(),
     })
   } catch (e) {
-    return NextResponse.json({ total_eur: 0, buckets: null, error: String(e) }, { status: 200 })
+    return NextResponse.json({ total_eur: 0, error: String(e) }, { status: 200 })
   }
 }
 
+// POST: snapshot
 export async function POST(req: Request) {
-  // Trigger a snapshot write
   try {
     const supa = createClient(SUPA_URL, KEY)
     const u = new URL(req.url)
     const originRes = await fetch(`${u.origin}/api/finance/summary`, { cache: 'no-store' })
     const j = await originRes.json()
-    if (!j?.buckets) return NextResponse.json({ ok: false, error: 'no summary' }, { status: 200 })
+    if (!j?.total_eur && j?.total_eur !== 0) return NextResponse.json({ ok: false, error: 'no summary' }, { status: 200 })
 
     const row = {
       ts: new Date().toISOString(),
       total_eur: j.total_eur,
-      liquid_eur: j.buckets.liquid.total,
-      investments_eur: j.buckets.investments.total,
-      physical_eur: j.buckets.physical.total,
-      other_eur: j.buckets.other.total,
-      breakdown: j.buckets,
+      liquid_eur: 0,  // schema compat
+      investments_eur: j.user_tracked?.current || 0,
+      physical_eur: j.live_sources?.realEstate?.total_eur || 0,
+      other_eur: (j.live_sources?.ibkr?.total_eur || 0) + (j.live_sources?.edgar?.nav_eur || 0),
+      breakdown: j,
     }
     const { error } = await supa.from('finance_snapshots').insert(row)
     return NextResponse.json({ ok: !error, error: error?.message, snapshot: row })

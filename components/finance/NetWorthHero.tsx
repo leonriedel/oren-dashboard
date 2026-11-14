@@ -2,33 +2,26 @@
 
 type Props = {
   total: number
-  prev?: number
+  monthly: number
+  yearly: number
   loading?: boolean
 }
 
-export default function NetWorthHero({ total, prev, loading }: Props) {
-  const delta = prev !== undefined ? total - prev : 0
-  const deltaPct = prev ? (delta / prev) * 100 : 0
-  const up = delta >= 0
-
+export default function NetWorthHero({ total, monthly, yearly, loading }: Props) {
   const fmt = (n: number) => '€' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const sign = (n: number) => n > 0 ? '+' : ''
+  const pct = (n: number, base: number) => base ? ((n / base) * 100).toFixed(2) + '%' : '0.00%'
+  const col = (n: number) => n > 0 ? '#34d399' : n < 0 ? '#f87171' : '#d8e9ff'
 
   return (
     <div style={{
       padding: '20px 24px',
       background: 'linear-gradient(135deg, rgba(80,180,255,0.06) 0%, rgba(80,180,255,0.02) 100%)',
-      border: '1px solid rgba(80,180,255,0.18)',
+      border: '1px solid rgba(80,180,255,0.2)',
+      borderLeft: '3px solid #5db8ff',
       borderRadius: 4,
       fontFamily: 'DM Sans, system-ui, sans-serif',
-      position: 'relative',
-      overflow: 'hidden',
     }}>
-      {/* Decorative corner brackets */}
-      <CornerDot pos="tl" />
-      <CornerDot pos="tr" />
-      <CornerDot pos="bl" />
-      <CornerDot pos="br" />
-
       <div style={{
         fontSize: 10, letterSpacing: 4, color: '#7ea6d5',
         fontFamily: 'Space Mono, monospace', marginBottom: 6,
@@ -37,52 +30,49 @@ export default function NetWorthHero({ total, prev, loading }: Props) {
       </div>
 
       <div style={{
-        display: 'flex', alignItems: 'baseline', gap: 16, flexWrap: 'wrap',
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)',
+        gap: 24, alignItems: 'baseline',
       }}>
-        <div style={{
-          fontSize: 46, fontWeight: 300, color: '#d8e9ff', letterSpacing: -0.5,
-          fontFamily: 'DM Sans, system-ui, sans-serif',
-        }}>
-          {loading ? '—' : fmt(total)}
-        </div>
-
-        {prev !== undefined && prev > 0 && (
+        <div>
           <div style={{
-            display: 'flex', alignItems: 'baseline', gap: 10,
+            fontSize: 46, fontWeight: 300, color: '#d8e9ff', letterSpacing: -0.5,
+            lineHeight: 1,
+          }}>
+            {loading ? '—' : fmt(total)}
+          </div>
+          <div style={{
+            fontSize: 10, color: 'rgba(126,166,213,0.6)', letterSpacing: 2, marginTop: 6,
             fontFamily: 'Space Mono, monospace',
           }}>
-            <span style={{
-              fontSize: 14, fontWeight: 700,
-              color: up ? '#34d399' : '#f87171',
-            }}>
-              {up ? '↑' : '↓'} {up ? '+' : ''}{fmt(delta)}
-            </span>
-            <span style={{
-              fontSize: 12, color: up ? '#34d399' : '#f87171',
-              padding: '2px 8px', border: `1px solid ${up ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`,
-              background: up ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)',
-            }}>
-              {up ? '+' : ''}{deltaPct.toFixed(2)}%
-            </span>
-            <span style={{ fontSize: 10, color: 'rgba(126,166,213,0.6)', letterSpacing: 2 }}>
-              VS START OF PERIOD
-            </span>
+            CURRENT VALUE · ALL ASSETS
           </div>
-        )}
+        </div>
+
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: 3, color: 'rgba(126,166,213,0.6)', fontFamily: 'Space Mono, monospace', marginBottom: 4 }}>
+            MONTHLY RETURN
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: col(monthly), fontFamily: 'Space Mono, monospace' }}>
+            {sign(monthly)}€{Math.abs(monthly).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </div>
+          <div style={{ fontSize: 10, color: col(monthly), fontFamily: 'Space Mono, monospace', marginTop: 2 }}>
+            {sign(monthly)}{pct(monthly, total)}
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 10, letterSpacing: 3, color: 'rgba(126,166,213,0.6)', fontFamily: 'Space Mono, monospace', marginBottom: 4 }}>
+            YEARLY RETURN
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: col(yearly), fontFamily: 'Space Mono, monospace' }}>
+            {sign(yearly)}€{Math.abs(yearly).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </div>
+          <div style={{ fontSize: 10, color: col(yearly), fontFamily: 'Space Mono, monospace', marginTop: 2 }}>
+            {sign(yearly)}{pct(yearly, total)}
+          </div>
+        </div>
       </div>
     </div>
   )
-}
-
-function CornerDot({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const style: any = {
-    position: 'absolute', width: 10, height: 10,
-    borderColor: 'rgba(80,180,255,0.35)',
-    borderStyle: 'solid', borderWidth: 0,
-  }
-  if (pos.includes('t')) { style.top = 8; style.borderTopWidth = 1 }
-  if (pos.includes('b')) { style.bottom = 8; style.borderBottomWidth = 1 }
-  if (pos.includes('l')) { style.left = 8; style.borderLeftWidth = 1 }
-  if (pos.includes('r')) { style.right = 8; style.borderRightWidth = 1 }
-  return <div style={style} />
 }

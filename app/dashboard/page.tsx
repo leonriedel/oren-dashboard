@@ -148,13 +148,12 @@ export default function Dashboard() {
     { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: false },
     { id: 'think',   key: '02', label: 'THINKSPACE',  sub: 'Shared Notes & Boards',locked: false },
     { id: 'radar',   key: '03', label: 'RADAR AI',  sub: 'Market Intelligence',  locked: !isAdmin },
-    { id: 'invest',  key: '04', label: 'INVESTMENTS', sub: 'Portfolio & Returns',  locked: !isAdmin },
+    { id: 'finance', key: '04', label: 'FINANCE',     sub: 'Networth · Portfolio · Returns', locked: !isAdmin },
     { id: 'news',    key: '05', label: 'NEWS',        sub: 'Intel & Headlines',    locked: false },
     { id: 'sport',   key: '06', label: 'SPORT',       sub: 'Body & Performance',   locked: false },
     { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projects & Portfolio', locked: false },
     { id: 'calendar',key: '08', label: 'CALENDAR',    sub: 'Google Calendar Live', locked: false },
     { id: 'scalper', key: '09', label: 'EDGAR SCALPER', sub: 'XAU + FX Trend Scalper', locked: !isAdmin },
-    { id: 'finance', key: '10', label: 'FINANCE',       sub: 'Networth · All Assets',  locked: !isAdmin },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -421,7 +420,7 @@ export default function Dashboard() {
               justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>◇ MODULES</span>
-              <span style={{ color: '#34d399' }}>● 10/10 ACTIVE</span>
+              <span style={{ color: '#34d399' }}>● 9/9 ACTIVE</span>
             </div>
 
             {modules.map(m => (
