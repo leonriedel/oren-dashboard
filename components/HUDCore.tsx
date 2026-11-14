@@ -4,14 +4,26 @@ import { useEffect, useRef } from 'react'
 type OrbState = 'idle' | 'thinking' | 'speaking' | 'listening'
 
 /**
- * HUDCore v2 — A+C Hybrid
- *   Outer:  3D wireframe sphere (longitude + latitude, rotating)
- *           + subtle tick ring + state indicator arcs
- *   Inner:  Neural network cluster (~40 nodes, pulsing synapses)
- *   Depth:  Mouse parallax, perspective projection
- *   Core:   Dense glowing nucleus
+ * HUDCore v3 — maxed out complexity
  *
- * All canvas 2D, no WebGL deps. Looks alive, structured, modern.
+ * Layers (back to front):
+ *   1. Ambient nebula glow + soft gradient fog
+ *   2. Outer orbital rings (3 tilted elliptical paths with particles on them)
+ *   3. Floating ambient particles (60+, slow drift)
+ *   4. Geodesic icosahedron outer shell (triangulated faces with glow on front)
+ *   5. Mid-layer wireframe sphere (meridians + parallels)
+ *   6. Orbit particles — small dots on each ring
+ *   7. Energy pulse rings (ripple outward every ~3s)
+ *   8. Neural network cluster inside (42 nodes + synapse firings)
+ *   9. Dense glowing core nucleus
+ *  10. Inward-flowing data streams (yellow)
+ *  11. Scanline sweep (subtle horizontal line moving down)
+ *  12. Rotating hex glyphs at outer edge (data-like text)
+ *  13. Chromatic aberration edge shimmer
+ *  14. State indicator arc
+ *  15. Corner brackets
+ *
+ * All canvas 2D. Mouse parallax. State-reactive.
  */
 export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: OrbState; size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -36,77 +48,79 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
     const cx = size / 2
     const cy = size / 2
-    const sphereR = size * 0.34
-    const nodeSphereR = sphereR * 0.72
+    const sphereR = size * 0.30
+    const shellR = size * 0.38
+    const nodeSphereR = sphereR * 0.70
     const focal = size * 0.9
 
-    // Mouse parallax listener (gentle)
+    // Mouse parallax
     const onMouseMove = (e: MouseEvent) => {
       const rect = container.getBoundingClientRect()
       const dx = (e.clientX - rect.left - size / 2) / (size / 2)
       const dy = (e.clientY - rect.top - size / 2) / (size / 2)
-      mouseRef.current.target_x = Math.max(-1.5, Math.min(1.5, dx))
-      mouseRef.current.target_y = Math.max(-1.5, Math.min(1.5, dy))
+      mouseRef.current.target_x = Math.max(-1.8, Math.min(1.8, dx))
+      mouseRef.current.target_y = Math.max(-1.8, Math.min(1.8, dy))
     }
     window.addEventListener('mousemove', onMouseMove)
 
-    // ─── Build neural node cluster ───
-    type Node = { x: number; y: number; z: number; r: number; activation: number; nextFire: number }
-    const nodes: Node[] = []
-    const NODE_COUNT = 42
-    for (let i = 0; i < NODE_COUNT; i++) {
-      // Random distribution inside a sphere (rejection sampling)
-      let x = 0, y = 0, z = 0
-      for (let tries = 0; tries < 20; tries++) {
-        x = (Math.random() - 0.5) * 2
-        y = (Math.random() - 0.5) * 2
-        z = (Math.random() - 0.5) * 2
-        if (x * x + y * y + z * z <= 1) break
-      }
-      nodes.push({
-        x: x * nodeSphereR,
-        y: y * nodeSphereR,
-        z: z * nodeSphereR,
-        r: 1.4 + Math.random() * 1.6,
-        activation: Math.random() * 0.3,
-        nextFire: Math.random() * 180,
-      })
-    }
-
-    // Precompute edge list (each node connects to its 3-4 nearest)
-    type Edge = { a: number; b: number; strength: number; dist: number }
-    const edges: Edge[] = []
-    for (let i = 0; i < nodes.length; i++) {
-      const dists: Array<{ j: number; d: number }> = []
-      for (let j = 0; j < nodes.length; j++) {
-        if (i === j) continue
-        const dx = nodes[i].x - nodes[j].x
-        const dy = nodes[i].y - nodes[j].y
-        const dz = nodes[i].z - nodes[j].z
-        dists.push({ j, d: Math.sqrt(dx*dx + dy*dy + dz*dz) })
-      }
-      dists.sort((a, b) => a.d - b.d)
-      // Take 3 nearest neighbors
-      for (let k = 0; k < 3; k++) {
-        const j = dists[k].j
-        if (i < j) {   // dedup
-          edges.push({ a: i, b: j, strength: 0, dist: dists[k].d })
-        }
-      }
-    }
-
-    // Build sphere wireframe geometry (meridians + parallels)
-    const MERIDIANS = 12
-    const PARALLELS = 7
-    const POINTS_PER_LINE = 48
     type V3 = { x: number; y: number; z: number }
+
+    // ─── Geodesic icosahedron shell (12 vertices, 20 triangle faces) ───
+    const PHI = (1 + Math.sqrt(5)) / 2
+    const icoVerts: V3[] = [
+      { x: -1, y: PHI, z: 0 }, { x: 1, y: PHI, z: 0 },
+      { x: -1, y: -PHI, z: 0 }, { x: 1, y: -PHI, z: 0 },
+      { x: 0, y: -1, z: PHI }, { x: 0, y: 1, z: PHI },
+      { x: 0, y: -1, z: -PHI }, { x: 0, y: 1, z: -PHI },
+      { x: PHI, y: 0, z: -1 }, { x: PHI, y: 0, z: 1 },
+      { x: -PHI, y: 0, z: -1 }, { x: -PHI, y: 0, z: 1 },
+    ].map(v => {
+      const len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+      return { x: v.x / len * shellR, y: v.y / len * shellR, z: v.z / len * shellR }
+    })
+    const icoFaces: [number,number,number][] = [
+      [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
+      [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
+      [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
+      [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
+    ]
+    // Subdivide each face once → 80 smaller triangles for denser geodesic
+    const subdivided: [V3,V3,V3][] = []
+    const midpoint = (a: V3, b: V3) => {
+      const m = { x: (a.x+b.x)/2, y: (a.y+b.y)/2, z: (a.z+b.z)/2 }
+      const len = Math.sqrt(m.x*m.x + m.y*m.y + m.z*m.z)
+      return { x: m.x/len*shellR, y: m.y/len*shellR, z: m.z/len*shellR }
+    }
+    for (const [ia, ib, ic] of icoFaces) {
+      const a = icoVerts[ia], b = icoVerts[ib], c = icoVerts[ic]
+      const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a)
+      subdivided.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca])
+    }
+    // Unique edges from subdivided faces (for wireframe draw)
+    const edgeKey = (a: V3, b: V3) => {
+      const k1 = `${a.x.toFixed(3)},${a.y.toFixed(3)},${a.z.toFixed(3)}`
+      const k2 = `${b.x.toFixed(3)},${b.y.toFixed(3)},${b.z.toFixed(3)}`
+      return k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1
+    }
+    const edgeMap = new Map<string, [V3,V3]>()
+    for (const [a,b,c] of subdivided) {
+      for (const [p, q] of [[a,b],[b,c],[c,a]] as [V3,V3][]) {
+        edgeMap.set(edgeKey(p, q), [p, q])
+      }
+    }
+    const shellEdges = Array.from(edgeMap.values())
+
+    // ─── Inner wireframe sphere (meridians + parallels) ───
+    const MERIDIANS = 10
+    const PARALLELS = 6
+    const PPL = 36
     const meridianLines: V3[][] = []
     const parallelLines: V3[][] = []
     for (let m = 0; m < MERIDIANS; m++) {
       const lineLon = (m / MERIDIANS) * Math.PI * 2
       const pts: V3[] = []
-      for (let p = 0; p <= POINTS_PER_LINE; p++) {
-        const lat = -Math.PI / 2 + (p / POINTS_PER_LINE) * Math.PI
+      for (let p = 0; p <= PPL; p++) {
+        const lat = -Math.PI / 2 + (p / PPL) * Math.PI
         pts.push({
           x: sphereR * Math.cos(lat) * Math.cos(lineLon),
           y: sphereR * Math.sin(lat),
@@ -118,8 +132,8 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     for (let q = 1; q < PARALLELS; q++) {
       const lat = -Math.PI / 2 + (q / PARALLELS) * Math.PI
       const pts: V3[] = []
-      for (let p = 0; p <= POINTS_PER_LINE; p++) {
-        const lon = (p / POINTS_PER_LINE) * Math.PI * 2
+      for (let p = 0; p <= PPL; p++) {
+        const lon = (p / PPL) * Math.PI * 2
         pts.push({
           x: sphereR * Math.cos(lat) * Math.cos(lon),
           y: sphereR * Math.sin(lat),
@@ -129,248 +143,315 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       parallelLines.push(pts)
     }
 
-    // Rotation matrices
+    // ─── Neural nodes ───
+    type Node = { x: number; y: number; z: number; r: number; activation: number; nextFire: number }
+    const nodes: Node[] = []
+    const NODE_COUNT = 48
+    for (let i = 0; i < NODE_COUNT; i++) {
+      let x = 0, y = 0, z = 0
+      for (let t2 = 0; t2 < 20; t2++) {
+        x = (Math.random()-0.5)*2; y = (Math.random()-0.5)*2; z = (Math.random()-0.5)*2
+        if (x*x+y*y+z*z <= 1) break
+      }
+      nodes.push({ x: x*nodeSphereR, y: y*nodeSphereR, z: z*nodeSphereR,
+        r: 1.3 + Math.random()*1.8, activation: Math.random()*0.3, nextFire: Math.random()*180 })
+    }
+    type NEdge = { a: number; b: number; strength: number }
+    const nEdges: NEdge[] = []
+    for (let i = 0; i < nodes.length; i++) {
+      const dists = nodes.map((n,j) => {
+        if (i===j) return { j, d: Infinity }
+        const dx=nodes[i].x-n.x, dy=nodes[i].y-n.y, dz=nodes[i].z-n.z
+        return { j, d: Math.sqrt(dx*dx+dy*dy+dz*dz) }
+      }).sort((a,b)=>a.d-b.d)
+      for (let k = 0; k < 3; k++) {
+        const j = dists[k].j
+        if (i < j) nEdges.push({ a: i, b: j, strength: 0 })
+      }
+    }
+
+    // ─── Orbital rings (3 rings at different 3D tilts) ───
+    type Orbit = { tiltX: number; tiltZ: number; r: number; speed: number; particleCount: number; phase: number }
+    const orbits: Orbit[] = [
+      { tiltX: 0.6, tiltZ: 0.3, r: shellR * 1.08, speed: 0.008, particleCount: 1, phase: 0 },
+      { tiltX: -0.4, tiltZ: 0.9, r: shellR * 1.18, speed: -0.006, particleCount: 1, phase: Math.PI/3 },
+      { tiltX: 0.9, tiltZ: -0.5, r: shellR * 1.28, speed: 0.010, particleCount: 1, phase: Math.PI/1.5 },
+    ]
+
+    // ─── Floating ambient particles (orbit randomly) ───
+    type Particle = { angle: number; distance: number; speed: number; size: number; tiltX: number; tiltZ: number; phase: number }
+    const particles: Particle[] = []
+    for (let i = 0; i < 70; i++) {
+      particles.push({
+        angle: Math.random() * Math.PI * 2,
+        distance: shellR * (1.05 + Math.random() * 0.4),
+        speed: (Math.random() - 0.5) * 0.004,
+        size: 0.6 + Math.random() * 1.2,
+        tiltX: (Math.random() - 0.5) * 2,
+        tiltZ: (Math.random() - 0.5) * 2,
+        phase: Math.random() * Math.PI * 2,
+      })
+    }
+
+    // ─── Energy pulse rings ───
+    type Pulse = { progress: number; speed: number; alpha: number }
+    const pulses: Pulse[] = []
+    let nextPulseTime = 0
+
+    // ─── Rotating glyphs (data-like text around outer edge) ───
+    const GLYPHS = '01□△○◇★✦▲∞Σ∆Ω◊⬡⬢⬣'
+    type Glyph = { char: string; angle: number }
+    const glyphs: Glyph[] = []
+    for (let i = 0; i < 24; i++) {
+      glyphs.push({
+        char: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+        angle: (i / 24) * Math.PI * 2,
+      })
+    }
+    let glyphRefreshTimer = 0
+
+    // Data streams
+    type Stream = { angle: number; progress: number; speed: number }
+    const streams: Stream[] = []
+    for (let i = 0; i < 8; i++) {
+      streams.push({
+        angle: Math.random() * Math.PI * 2,
+        progress: Math.random(),
+        speed: 0.004 + Math.random() * 0.007,
+      })
+    }
+
+    // Rotation
     const rot = (p: V3, rx: number, ry: number): V3 => {
-      // Rotate around Y
       let x = p.x * Math.cos(ry) + p.z * Math.sin(ry)
       let z = -p.x * Math.sin(ry) + p.z * Math.cos(ry)
       let y = p.y
-      // Rotate around X
       const y2 = y * Math.cos(rx) - z * Math.sin(rx)
       const z2 = y * Math.sin(rx) + z * Math.cos(rx)
       return { x, y: y2, z: z2 }
     }
-
-    // Project 3D → 2D with perspective
-    const project = (p: V3): { sx: number; sy: number; scale: number } => {
+    const project = (p: V3) => {
       const scale = focal / (focal + p.z)
       return { sx: cx + p.x * scale, sy: cy + p.y * scale, scale }
     }
 
+    const CYAN  = { r: 100, g: 200, b: 255 }
+    const DEEP  = { r:  60, g: 130, b: 220 }
+    const ACC   = { r: 255, g: 215, b:  60 }
+    const WHITE = { r: 230, g: 245, b: 255 }
+    const MAGENTA = { r: 200, g: 100, b: 220 }
+
     let t = 0
     let animId: number
-
-    // Data streams (inward arrows)
-    type Stream = { angle: number; progress: number; speed: number }
-    const streams: Stream[] = []
-    for (let i = 0; i < 6; i++) {
-      streams.push({
-        angle: Math.random() * Math.PI * 2,
-        progress: Math.random(),
-        speed: 0.004 + Math.random() * 0.006,
-      })
-    }
-
-    const CYAN = { r: 100, g: 200, b: 255 }
-    const DEEP = { r: 60, g: 130, b: 220 }
-    const ACC  = { r: 255, g: 215, b: 60 }      // yellow accent for state
-    const WHITE = { r: 220, g: 245, b: 255 }
+    let scanY = 0
 
     const draw = () => {
       t += 1
       ctx.clearRect(0, 0, size, size)
 
-      // Smooth mouse interpolation
-      mouseRef.current.x += (mouseRef.current.target_x - mouseRef.current.x) * 0.06
-      mouseRef.current.y += (mouseRef.current.target_y - mouseRef.current.y) * 0.06
+      mouseRef.current.x += (mouseRef.current.target_x - mouseRef.current.x) * 0.05
+      mouseRef.current.y += (mouseRef.current.target_y - mouseRef.current.y) * 0.05
 
       const s = stateRef.current
-      const stateMult = s === 'idle' ? 1.0 : s === 'thinking' ? 1.4 : s === 'speaking' ? 1.6 : 1.3
+      const stateMult = s === 'idle' ? 1.0 : s === 'thinking' ? 1.5 : s === 'speaking' ? 1.8 : 1.3
       const pulse = (Math.sin(t * 0.025) + 1) * 0.5
+      const pulseFast = (Math.sin(t * 0.08) + 1) * 0.5
 
-      // Rotation: continuous slow Y + mouse parallax
-      const ry = t * 0.0035 + mouseRef.current.x * 0.4
-      const rx = -0.35 + mouseRef.current.y * -0.3
+      const ry = t * 0.0028 + mouseRef.current.x * 0.5
+      const rx = -0.32 + mouseRef.current.y * -0.35
 
-      // ═════════════ AMBIENT GLOW ═════════════
-      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.5)
-      ambient.addColorStop(0,   `rgba(${DEEP.r}, ${DEEP.g}, ${DEEP.b}, ${0.14 + pulse * 0.08})`)
-      ambient.addColorStop(0.4, `rgba(${DEEP.r}, 100, 180, ${0.07 + pulse * 0.04})`)
-      ambient.addColorStop(1,   'rgba(0, 0, 0, 0)')
+      // ═══ LAYER 1: AMBIENT NEBULA ═══
+      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.55)
+      ambient.addColorStop(0, `rgba(${DEEP.r}, ${DEEP.g}, ${DEEP.b}, ${0.13 + pulse * 0.08})`)
+      ambient.addColorStop(0.3, `rgba(${MAGENTA.r}, 80, 180, ${0.04 + pulse * 0.03})`)
+      ambient.addColorStop(0.6, `rgba(40, 80, 140, ${0.05 + pulse * 0.02})`)
+      ambient.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.fillStyle = ambient
       ctx.fillRect(0, 0, size, size)
 
-      // ═════════════ OUTER SUBTLE TICK RING ═════════════
-      const outerR = size * 0.46
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(t * 0.0006)
-      for (let i = 0; i < 60; i++) {
-        const angle = (i / 60) * Math.PI * 2 - Math.PI / 2
-        const isMajor = i % 15 === 0
-        const tickLen = isMajor ? 12 : 4
-        const op = isMajor ? 0.5 : 0.15
-        const x1 = Math.cos(angle) * outerR
-        const y1 = Math.sin(angle) * outerR
-        const x2 = Math.cos(angle) * (outerR - tickLen)
-        const y2 = Math.sin(angle) * (outerR - tickLen)
+      // ═══ LAYER 2: ORBITAL RINGS (behind sphere) ═══
+      for (const orb of orbits) {
+        orb.phase += orb.speed * stateMult
+        ctx.save()
+        ctx.translate(cx, cy)
+        // Project ellipse manually by sampling
         ctx.beginPath()
-        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${op})`
-        ctx.lineWidth = isMajor ? 1.2 : 0.5
-        ctx.stroke()
-      }
-      ctx.restore()
-
-      // ═════════════ STATE INDICATOR ARC (yellow accent, position shows state) ═════════════
-      const stateArcR = size * 0.42
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(t * 0.002 * stateMult)
-      const arcSpan = s === 'idle' ? 0.08 : 0.25
-      ctx.beginPath()
-      ctx.arc(0, 0, stateArcR, -arcSpan, arcSpan)
-      ctx.strokeStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.7 + pulse * 0.25})`
-      ctx.lineWidth = 2.2
-      ctx.stroke()
-      ctx.restore()
-
-      // ═════════════ WIREFRAME SPHERE ═════════════
-      // Project + draw each line. Back-facing (z > 0) gets dimmer.
-      const drawProjectedLine = (pts3: V3[], baseAlpha: number) => {
-        ctx.beginPath()
-        let started = false
-        let lastAlpha = 0
-        for (let i = 0; i < pts3.length; i++) {
-          const rp = rot(pts3[i], rx, ry)
-          const pr = project(rp)
-          // depth: z<0 is front, z>0 is back
-          const depth = (-rp.z / sphereR + 1) * 0.5    // 0 back, 1 front
-          const alpha = baseAlpha * (0.15 + depth * 0.85)
-          if (!started) {
-            ctx.moveTo(pr.sx, pr.sy)
-            started = true
-          } else {
-            // Draw segment with interpolated alpha per step
-            ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
-            ctx.lineTo(pr.sx, pr.sy)
-          }
-          lastAlpha = alpha
+        for (let i = 0; i <= 64; i++) {
+          const a = (i / 64) * Math.PI * 2
+          const px = Math.cos(a) * orb.r
+          const pz = Math.sin(a) * orb.r
+          const p3: V3 = { x: px, y: 0, z: pz }
+          // tilt
+          const tx = p3.x, ty = p3.y * Math.cos(orb.tiltX) - p3.z * Math.sin(orb.tiltX), tz = p3.y * Math.sin(orb.tiltX) + p3.z * Math.cos(orb.tiltX)
+          const tx2 = tx * Math.cos(orb.tiltZ) - ty * Math.sin(orb.tiltZ), ty2 = tx * Math.sin(orb.tiltZ) + ty * Math.cos(orb.tiltZ), tz2 = tz
+          const rotated = rot({ x: tx2, y: ty2, z: tz2 }, rx, ry)
+          const prj = project(rotated)
+          const px2 = prj.sx - cx, py2 = prj.sy - cy
+          if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2)
         }
-        // single stroke (approximation; for truly per-segment alpha we'd need many strokes)
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${baseAlpha * 0.6})`
-        ctx.lineWidth = 0.7
+        ctx.closePath()
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.22)`
+        ctx.lineWidth = 0.8
+        ctx.stroke()
+        ctx.restore()
+
+        // Draw particle on orbit
+        const p3: V3 = { x: Math.cos(orb.phase) * orb.r, y: 0, z: Math.sin(orb.phase) * orb.r }
+        const tx = p3.x, ty = p3.y * Math.cos(orb.tiltX) - p3.z * Math.sin(orb.tiltX), tz = p3.y * Math.sin(orb.tiltX) + p3.z * Math.cos(orb.tiltX)
+        const tx2 = tx * Math.cos(orb.tiltZ) - ty * Math.sin(orb.tiltZ), ty2 = tx * Math.sin(orb.tiltZ) + ty * Math.cos(orb.tiltZ), tz2 = tz
+        const rotated = rot({ x: tx2, y: ty2, z: tz2 }, rx, ry)
+        const prj = project(rotated)
+        const depth = (-rotated.z / orb.r + 1) * 0.5
+        const r = 2.5 + depth * 1.5
+        const g = ctx.createRadialGradient(prj.sx, prj.sy, 0, prj.sx, prj.sy, r * 4)
+        g.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.9 * (0.4 + depth * 0.6)})`)
+        g.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r * 4, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.5 + depth * 0.5})`
+        ctx.fill()
+      }
+
+      // ═══ LAYER 3: FLOATING AMBIENT PARTICLES ═══
+      for (const p of particles) {
+        p.angle += p.speed * stateMult
+        const px = Math.cos(p.angle) * p.distance
+        const pz = Math.sin(p.angle) * p.distance
+        const py = Math.sin(p.phase + t * 0.01) * p.distance * 0.1
+        const tx = px, ty = py * Math.cos(p.tiltX) - pz * Math.sin(p.tiltX), tz = py * Math.sin(p.tiltX) + pz * Math.cos(p.tiltX)
+        const rotated = rot({ x: tx, y: ty, z: tz }, rx, ry)
+        const prj = project(rotated)
+        const depth = (-rotated.z / p.distance + 1) * 0.5
+        const r = p.size * (0.5 + depth * 0.8)
+        const alpha = 0.15 + depth * 0.45
+        ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`
+        ctx.fill()
+      }
+
+      // ═══ LAYER 4: GEODESIC ICOSAHEDRON SHELL ═══
+      for (const [p1, p2] of shellEdges) {
+        const r1 = rot(p1, rx, ry), r2 = rot(p2, rx, ry)
+        const pr1 = project(r1), pr2 = project(r2)
+        const avgZ = (r1.z + r2.z) / 2
+        const depth = (-avgZ / shellR + 1) * 0.5
+        const alpha = 0.06 + depth * 0.45
+        ctx.beginPath()
+        ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
+        ctx.lineWidth = 0.6
         ctx.stroke()
       }
 
-      // Draw meridians (per-segment alpha for correct depth cueing)
-      ctx.lineWidth = 0.8
+      // ═══ LAYER 5: INNER WIREFRAME SPHERE ═══
       for (const line of meridianLines) {
         for (let i = 0; i < line.length - 1; i++) {
-          const p1r = rot(line[i], rx, ry)
-          const p2r = rot(line[i + 1], rx, ry)
-          const p1 = project(p1r)
-          const p2 = project(p2r)
-          const avgZ = (p1r.z + p2r.z) / 2
+          const p1 = rot(line[i], rx, ry), p2 = rot(line[i+1], rx, ry)
+          const pr1 = project(p1), pr2 = project(p2)
+          const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphereR + 1) * 0.5
-          const alpha = 0.08 + depth * 0.55
+          const alpha = 0.08 + depth * 0.50
           ctx.beginPath()
-          ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy)
+          ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
+          ctx.lineWidth = 0.7
           ctx.stroke()
         }
       }
-      // Parallels (slightly dimmer)
       for (const line of parallelLines) {
         for (let i = 0; i < line.length - 1; i++) {
-          const p1r = rot(line[i], rx, ry)
-          const p2r = rot(line[i + 1], rx, ry)
-          const p1 = project(p1r)
-          const p2 = project(p2r)
-          const avgZ = (p1r.z + p2r.z) / 2
+          const p1 = rot(line[i], rx, ry), p2 = rot(line[i+1], rx, ry)
+          const pr1 = project(p1), pr2 = project(p2)
+          const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphereR + 1) * 0.5
-          const alpha = 0.05 + depth * 0.40
+          const alpha = 0.05 + depth * 0.35
           ctx.beginPath()
-          ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy)
+          ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
-          ctx.lineWidth = 0.6
+          ctx.lineWidth = 0.5
           ctx.stroke()
         }
       }
 
-      // ═════════════ NEURAL NETWORK (inside sphere) ═════════════
-      // Update node activations
+      // ═══ LAYER 7: ENERGY PULSE RINGS ═══
+      if (t > nextPulseTime) {
+        pulses.push({ progress: 0, speed: 0.012, alpha: 0.6 })
+        nextPulseTime = t + 160 + Math.random() * 80
+      }
+      for (let i = pulses.length - 1; i >= 0; i--) {
+        const p = pulses[i]
+        p.progress += p.speed * stateMult
+        p.alpha = 0.6 * (1 - p.progress)
+        if (p.progress >= 1) { pulses.splice(i, 1); continue }
+        const r = sphereR * 0.3 + p.progress * sphereR * 2.0
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${p.alpha})`
+        ctx.lineWidth = 1.5 * (1 - p.progress * 0.5)
+        ctx.stroke()
+      }
+
+      // ═══ LAYER 8: NEURAL NETWORK ═══
       for (let i = 0; i < nodes.length; i++) {
         nodes[i].nextFire--
         nodes[i].activation = Math.max(0, nodes[i].activation - 0.02)
         if (nodes[i].nextFire <= 0) {
           nodes[i].activation = 1
-          nodes[i].nextFire = 100 + Math.random() * 300
-          // propagate to neighbors with delay via edge strength
-          for (const e of edges) {
-            if (e.a === i || e.b === i) {
-              e.strength = 1
-            }
-          }
+          nodes[i].nextFire = 80 + Math.random() * 260
+          for (const e of nEdges) if (e.a === i || e.b === i) e.strength = 1
         }
       }
-      // Decay edge strength
-      for (const e of edges) e.strength = Math.max(0, e.strength - 0.025)
+      for (const e of nEdges) e.strength = Math.max(0, e.strength - 0.025)
 
-      // Project all nodes
       const projNodes = nodes.map(n => {
         const r = rot({ x: n.x, y: n.y, z: n.z }, rx, ry)
         const pr = project(r)
         const depth = (-r.z / nodeSphereR + 1) * 0.5
         return { ...n, sx: pr.sx, sy: pr.sy, depth, projScale: pr.scale }
       })
-
-      // Draw edges first (behind nodes)
-      for (const e of edges) {
-        const a = projNodes[e.a]
-        const b = projNodes[e.b]
+      for (const e of nEdges) {
+        const a = projNodes[e.a], b = projNodes[e.b]
         const avgDepth = (a.depth + b.depth) / 2
-        const baseAlpha = 0.03 + avgDepth * 0.12
-        const activeBoost = e.strength * 0.5
-        ctx.beginPath()
-        ctx.moveTo(a.sx, a.sy)
-        ctx.lineTo(b.sx, b.sy)
+        const baseAlpha = 0.04 + avgDepth * 0.14
+        const activeBoost = e.strength * 0.55
+        ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy)
         ctx.strokeStyle = e.strength > 0.3
           ? `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${baseAlpha + activeBoost})`
           : `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${baseAlpha + activeBoost})`
-        ctx.lineWidth = 0.6 + e.strength * 1.2
+        ctx.lineWidth = 0.5 + e.strength * 1.3
         ctx.stroke()
       }
-
-      // Sort nodes by depth (back first)
       projNodes.sort((a, b) => a.depth - b.depth)
-
-      // Draw nodes
       for (const n of projNodes) {
         const r = n.r * n.projScale * (0.6 + n.depth * 0.7)
-        const alpha = 0.25 + n.depth * 0.55 + n.activation * 0.3
-        // glow
+        const alpha = 0.3 + n.depth * 0.5 + n.activation * 0.3
         const glow = ctx.createRadialGradient(n.sx, n.sy, 0, n.sx, n.sy, r * 4)
         glow.addColorStop(0, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`)
         glow.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
-        ctx.beginPath(); ctx.arc(n.sx, n.sy, r * 4, 0, Math.PI * 2)
-        ctx.fillStyle = glow; ctx.fill()
-        // core
+        ctx.beginPath(); ctx.arc(n.sx, n.sy, r * 4, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill()
         ctx.beginPath(); ctx.arc(n.sx, n.sy, r, 0, Math.PI * 2)
         ctx.fillStyle = n.activation > 0.5
-          ? `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.8 + n.activation * 0.2})`
+          ? `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.85 + n.activation * 0.15})`
           : `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.5 + n.depth * 0.5})`
         ctx.fill()
       }
 
-      // ═════════════ CORE NUCLEUS ═════════════
-      const coreR = size * 0.045 + Math.sin(t * 0.05) * 3 * stateMult
-      // large outer soft halo
-      const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 7)
-      haloGrad.addColorStop(0, `rgba(120, 200, 255, ${0.25 + pulse * 0.18 * stateMult})`)
-      haloGrad.addColorStop(0.3, `rgba(80, 160, 240, ${0.14 + pulse * 0.10 * stateMult})`)
-      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)')
-      ctx.fillStyle = haloGrad
-      ctx.beginPath(); ctx.arc(cx, cy, coreR * 7, 0, Math.PI * 2); ctx.fill()
-      // core
+      // ═══ LAYER 9: CORE NUCLEUS ═══
+      const coreR = size * 0.04 + Math.sin(t * 0.05) * 3 * stateMult
+      const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 8)
+      halo.addColorStop(0, `rgba(140, 210, 255, ${0.3 + pulse * 0.2 * stateMult})`)
+      halo.addColorStop(0.3, `rgba(80, 160, 240, ${0.15 + pulse * 0.1 * stateMult})`)
+      halo.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = halo
+      ctx.beginPath(); ctx.arc(cx, cy, coreR * 8, 0, Math.PI * 2); ctx.fill()
       const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR)
-      core.addColorStop(0, `rgba(255, 255, 255, 1)`)
-      core.addColorStop(0.5, `rgba(180, 230, 255, 0.95)`)
+      core.addColorStop(0, 'rgba(255,255,255,1)')
+      core.addColorStop(0.5, 'rgba(180,230,255,0.95)')
       core.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.4)`)
       ctx.fillStyle = core
       ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill()
 
-      // ═════════════ DATA STREAMS (thin inward-flowing lines) ═════════════
+      // ═══ LAYER 10: DATA STREAMS ═══
       for (const stream of streams) {
         stream.progress += stream.speed * stateMult
         if (stream.progress > 1.2) {
@@ -378,36 +459,99 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           stream.progress = 0
           stream.speed = 0.003 + Math.random() * 0.007
         }
-        const startR = size * 0.44
-        const endR = coreR * 2
+        const startR = size * 0.44, endR = coreR * 2
         const r = startR - (startR - endR) * stream.progress
-        const tailR = startR - (startR - endR) * Math.max(0, stream.progress - 0.15)
+        const tailR = startR - (startR - endR) * Math.max(0, stream.progress - 0.18)
         const x1 = cx + Math.cos(stream.angle) * r
         const y1 = cy + Math.sin(stream.angle) * r
         const x2 = cx + Math.cos(stream.angle) * tailR
         const y2 = cy + Math.sin(stream.angle) * tailR
         const grad = ctx.createLinearGradient(x1, y1, x2, y2)
-        grad.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.9)`)
+        grad.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`)
         grad.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
-        ctx.beginPath()
-        ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
-        ctx.strokeStyle = grad
-        ctx.lineWidth = 1.4
-        ctx.stroke()
-        // head dot
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2)
+        ctx.strokeStyle = grad; ctx.lineWidth = 1.4; ctx.stroke()
         ctx.beginPath(); ctx.arc(x1, y1, 1.8, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`
-        ctx.fill()
+        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`; ctx.fill()
       }
 
-      // ═════════════ DECORATIVE CORNER BRACKETS ═════════════
-      const cornerR = size * 0.5 - 8
-      const cornerLen = 14
-      ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.4)`
-      ctx.lineWidth = 1
+      // ═══ LAYER 11: SCANLINE SWEEP ═══
+      scanY = (scanY + 0.6 * stateMult) % size
+      const scanGrad = ctx.createLinearGradient(0, scanY - 30, 0, scanY + 30)
+      scanGrad.addColorStop(0, 'rgba(100, 200, 255, 0)')
+      scanGrad.addColorStop(0.5, 'rgba(140, 220, 255, 0.07)')
+      scanGrad.addColorStop(1, 'rgba(100, 200, 255, 0)')
+      ctx.fillStyle = scanGrad
+      ctx.fillRect(0, scanY - 30, size, 60)
+      // Thin bright scanline
+      ctx.fillStyle = 'rgba(180, 230, 255, 0.12)'
+      ctx.fillRect(0, scanY, size, 1)
+
+      // ═══ LAYER 12: ROTATING HEX GLYPHS (outer edge) ═══
+      glyphRefreshTimer++
+      if (glyphRefreshTimer > 80) {
+        glyphRefreshTimer = 0
+        const idx = Math.floor(Math.random() * glyphs.length)
+        glyphs[idx].char = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
+      }
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(t * 0.0008)
+      ctx.font = '10px "Space Mono", monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const glyphR = size * 0.485
+      for (const g of glyphs) {
+        const x = Math.cos(g.angle) * glyphR
+        const y = Math.sin(g.angle) * glyphR
+        ctx.save()
+        ctx.translate(x, y)
+        ctx.rotate(g.angle + Math.PI / 2)
+        ctx.fillStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.25 + pulseFast * 0.2})`
+        ctx.fillText(g.char, 0, 0)
+        ctx.restore()
+      }
+      ctx.restore()
+
+      // ═══ LAYER 13: CHROMATIC ABERRATION EDGE SHIMMER ═══
+      ctx.save()
+      ctx.globalCompositeOperation = 'screen'
+      const chroma = ctx.createRadialGradient(cx, cy, size * 0.35, cx, cy, size * 0.5)
+      chroma.addColorStop(0, 'rgba(0,0,0,0)')
+      chroma.addColorStop(0.7, `rgba(255, 60, 150, ${0.015 + pulseFast * 0.015})`)
+      chroma.addColorStop(1, `rgba(100, 220, 255, ${0.02 + pulseFast * 0.015})`)
+      ctx.fillStyle = chroma
+      ctx.fillRect(0, 0, size, size)
+      ctx.restore()
+
+      // ═══ LAYER 14: STATE INDICATOR ARC ═══
+      const stateArcR = size * 0.465
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(t * 0.0025 * stateMult)
+      const arcSpan = s === 'idle' ? 0.10 : 0.30
+      ctx.beginPath()
+      ctx.arc(0, 0, stateArcR, -arcSpan, arcSpan)
+      ctx.strokeStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${0.7 + pulse * 0.25})`
+      ctx.lineWidth = 2.5
+      ctx.stroke()
+      // glow endpoints
+      for (const a of [-arcSpan, arcSpan]) {
+        const px = Math.cos(a) * stateArcR, py = Math.sin(a) * stateArcR
+        const g = ctx.createRadialGradient(px, py, 0, px, py, 8)
+        g.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 1)`)
+        g.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
+        ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+      }
+      ctx.restore()
+
+      // ═══ LAYER 15: CORNER BRACKETS ═══
+      const cornerR = size * 0.5 - 4
+      const cornerLen = 16
+      ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.45)`
+      ctx.lineWidth = 1.2
       for (const [dx, dy] of [[-1,-1],[1,-1],[-1,1],[1,1]] as [number,number][]) {
-        const x = cx + dx * cornerR
-        const y = cy + dy * cornerR
+        const x = cx + dx * cornerR, y = cy + dy * cornerR
         ctx.beginPath()
         ctx.moveTo(x, y + dy * -cornerLen)
         ctx.lineTo(x, y)
