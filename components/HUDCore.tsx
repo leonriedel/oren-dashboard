@@ -100,6 +100,58 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       parallelLines.push(pts)
     }
 
+    // ─── Second nested sphere (smaller, rotated differently for depth) ───
+    const sphere2R = sphereR * 0.68
+    const SPHERE2_LINES = 8
+    const sphere2Meridians: V3[][] = []
+    for (let m = 0; m < SPHERE2_LINES; m++) {
+      const lineLon = (m / SPHERE2_LINES) * Math.PI * 2
+      const pts: V3[] = []
+      for (let p = 0; p <= PPL; p++) {
+        const lat = -Math.PI / 2 + (p / PPL) * Math.PI
+        pts.push({
+          x: sphere2R * Math.cos(lat) * Math.cos(lineLon),
+          y: sphere2R * Math.sin(lat),
+          z: sphere2R * Math.cos(lat) * Math.sin(lineLon),
+        })
+      }
+      sphere2Meridians.push(pts)
+    }
+
+    // ─── DNA double helix winding around main sphere ───
+    const HELIX_TURNS = 3.5
+    const HELIX_POINTS = 120
+    const helixA: V3[] = []
+    const helixB: V3[] = []
+    for (let i = 0; i <= HELIX_POINTS; i++) {
+      const t2 = i / HELIX_POINTS
+      const angle = t2 * Math.PI * 2 * HELIX_TURNS
+      const y = (t2 - 0.5) * sphereR * 2 * 0.95
+      const circleR = Math.sqrt(Math.max(0, sphereR * sphereR - y * y)) * 1.02
+      helixA.push({ x: Math.cos(angle) * circleR, y, z: Math.sin(angle) * circleR })
+      helixB.push({ x: Math.cos(angle + Math.PI) * circleR, y, z: Math.sin(angle + Math.PI) * circleR })
+    }
+
+    // ─── Vertex intersection stars (meridian×parallel crossings) ───
+    const vertexStars: V3[] = []
+    for (let m = 0; m < MERIDIANS; m++) {
+      const lon = (m / MERIDIANS) * Math.PI * 2
+      for (let q = 1; q < PARALLELS; q++) {
+        const lat = -Math.PI / 2 + (q / PARALLELS) * Math.PI
+        vertexStars.push({
+          x: sphereR * Math.cos(lat) * Math.cos(lon),
+          y: sphereR * Math.sin(lat),
+          z: sphereR * Math.cos(lat) * Math.sin(lon),
+        })
+      }
+    }
+
+    // ─── Pulsing cross-section rings inside sphere (horizontal slices) ───
+    const crossRings: { lat: number; phase: number }[] = []
+    for (let i = 0; i < 5; i++) {
+      crossRings.push({ lat: -Math.PI/2 + (i+0.5)/5 * Math.PI, phase: i * 0.4 })
+    }
+
     // ─── Neural nodes ───
     type Node = { x: number; y: number; z: number; r: number; activation: number; nextFire: number }
     const nodes: Node[] = []
@@ -315,6 +367,117 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           ctx.stroke()
         }
       }
+
+      // ═══ LAYER 5b: SECOND NESTED SPHERE (counter-rotating for depth) ═══
+      const ry2 = -t * 0.0045 + mouseRef.current.x * 0.3
+      const rx2 = 0.2 + mouseRef.current.y * -0.2
+      for (const line of sphere2Meridians) {
+        for (let i = 0; i < line.length - 1; i++) {
+          const p1 = rot(line[i], rx2, ry2), p2 = rot(line[i+1], rx2, ry2)
+          const pr1 = project(p1), pr2 = project(p2)
+          const avgZ = (p1.z + p2.z) / 2
+          const depth = (-avgZ / sphere2R + 1) * 0.5
+          const alpha = 0.07 + depth * 0.35
+          ctx.beginPath()
+          ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
+          ctx.strokeStyle = `rgba(${MAGENTA.r}, ${MAGENTA.g}, ${MAGENTA.b}, ${alpha})`
+          ctx.lineWidth = 0.5
+          ctx.stroke()
+        }
+      }
+
+      // ═══ LAYER 5c: DNA HELIX STRANDS ═══
+      // Use rotated helix following main sphere rotation
+      const ryh = t * 0.0035 + mouseRef.current.x * 0.5
+      const rxh = -0.32 + mouseRef.current.y * -0.35
+      const drawHelix = (pts: V3[], color: {r:number;g:number;b:number}) => {
+        for (let i = 0; i < pts.length - 1; i++) {
+          const p1 = rot(pts[i], rxh, ryh), p2 = rot(pts[i+1], rxh, ryh)
+          const pr1 = project(p1), pr2 = project(p2)
+          const avgZ = (p1.z + p2.z) / 2
+          const depth = (-avgZ / sphereR + 1) * 0.5
+          const alpha = 0.15 + depth * 0.55
+          ctx.beginPath()
+          ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
+          ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
+          ctx.lineWidth = 1.0
+          ctx.stroke()
+        }
+      }
+      drawHelix(helixA, ACC)
+      drawHelix(helixB, { r: 180, g: 100, b: 255 })  // violet strand
+
+      // Helix connecting rungs (every 8th point)
+      for (let i = 0; i < helixA.length; i += 8) {
+        const a = rot(helixA[i], rxh, ryh)
+        const b = rot(helixB[i], rxh, ryh)
+        const prA = project(a), prB = project(b)
+        const depth = (-(a.z + b.z)/2 / sphereR + 1) * 0.5
+        ctx.beginPath()
+        ctx.moveTo(prA.sx, prA.sy); ctx.lineTo(prB.sx, prB.sy)
+        ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.08 + depth * 0.18})`
+        ctx.lineWidth = 0.4
+        ctx.stroke()
+      }
+
+      // ═══ LAYER 5d: VERTEX STARS (bright points at meridian×parallel) ═══
+      for (const v of vertexStars) {
+        const r = rot(v, rx, ry)
+        const pr = project(r)
+        const depth = (-r.z / sphereR + 1) * 0.5
+        const sr = 1.2 + depth * 1.3
+        const alpha = 0.35 + depth * 0.55
+        const g = ctx.createRadialGradient(pr.sx, pr.sy, 0, pr.sx, pr.sy, sr * 3)
+        g.addColorStop(0, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`)
+        g.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
+        ctx.beginPath(); ctx.arc(pr.sx, pr.sy, sr * 3, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
+        ctx.beginPath(); ctx.arc(pr.sx, pr.sy, sr * 0.6, 0, Math.PI * 2)
+        ctx.fillStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha + 0.15})`
+        ctx.fill()
+      }
+
+      // ═══ LAYER 5e: PULSING CROSS-SECTION RINGS (horizontal slices inside sphere) ═══
+      for (const ring of crossRings) {
+        ring.phase += 0.018 * stateMult
+        const ringPulse = (Math.sin(ring.phase) + 1) * 0.5
+        const circleR = sphereR * Math.cos(ring.lat)
+        const yOff = sphereR * Math.sin(ring.lat)
+        const pts: V3[] = []
+        for (let i = 0; i <= 32; i++) {
+          const a = (i / 32) * Math.PI * 2
+          pts.push({ x: Math.cos(a) * circleR, y: yOff, z: Math.sin(a) * circleR })
+        }
+        ctx.beginPath()
+        for (let i = 0; i < pts.length; i++) {
+          const r = rot(pts[i], rx, ry)
+          const pr = project(r)
+          if (i === 0) ctx.moveTo(pr.sx, pr.sy); else ctx.lineTo(pr.sx, pr.sy)
+        }
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.12 + ringPulse * 0.38})`
+        ctx.lineWidth = 0.8 + ringPulse * 0.8
+        ctx.stroke()
+      }
+
+      // ═══ LAYER 5f: RADIAL SUN-BURST RAYS FROM CORE (subtle) ═══
+      ctx.save()
+      ctx.translate(cx, cy)
+      ctx.rotate(t * 0.0015)
+      const rayCount = 48
+      for (let i = 0; i < rayCount; i++) {
+        const angle = (i / rayCount) * Math.PI * 2
+        const len = size * 0.14 + Math.sin(t * 0.04 + i) * 8
+        const x2 = Math.cos(angle) * len
+        const y2 = Math.sin(angle) * len
+        const grad = ctx.createLinearGradient(0, 0, x2, y2)
+        grad.addColorStop(0, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.25 + pulseFast * 0.1})`)
+        grad.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
+        ctx.beginPath()
+        ctx.moveTo(0, 0); ctx.lineTo(x2, y2)
+        ctx.strokeStyle = grad
+        ctx.lineWidth = 0.4
+        ctx.stroke()
+      }
+      ctx.restore()
 
       // ═══ LAYER 7: ENERGY PULSE RINGS ═══
       if (t > nextPulseTime) {
