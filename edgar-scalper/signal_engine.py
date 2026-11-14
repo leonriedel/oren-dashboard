@@ -18,6 +18,7 @@ and how strong the histogram inflection is.
 
 SL / TP are ATR-based: ±ATR*SL_MULT / ±ATR*TP_MULT
 """
+from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Literal
 import pandas as pd
@@ -74,14 +75,15 @@ def scan(symbol: str, timeframe: str, df: pd.DataFrame) -> Signal | None:
 
     last = annotated.iloc[-1]
     prev = annotated.iloc[-2]
+    hist_window_min = annotated["macd_hist"].iloc[-4:-1].min()
+    hist_window_max = annotated["macd_hist"].iloc[-4:-1].max()
     price = float(last["close"])
     atr_v = float(last["atr"])
     ts    = annotated.index[-1]
 
     # LONG check
     if (last["close"] <= last["bb_lower"]
-            and last["rsi"] <= config.RSI_OVERSOLD
-            and last["macd_hist"] > prev["macd_hist"]):
+            and last["rsi"] <= config.RSI_OVERSOLD):
         conf = _conf_long(last, prev)
         if conf >= config.MIN_CONFIDENCE:
             reasons = [
@@ -103,8 +105,7 @@ def scan(symbol: str, timeframe: str, df: pd.DataFrame) -> Signal | None:
 
     # SHORT check
     if (last["close"] >= last["bb_upper"]
-            and last["rsi"] >= config.RSI_OVERBOUGHT
-            and last["macd_hist"] < prev["macd_hist"]):
+            and last["rsi"] >= config.RSI_OVERBOUGHT):
         conf = _conf_short(last, prev)
         if conf >= config.MIN_CONFIDENCE:
             reasons = [

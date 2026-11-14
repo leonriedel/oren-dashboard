@@ -4,6 +4,7 @@ EDGAR SCALPER · Supabase journal
 Bot uses the service-role key, so RLS is bypassed from this side.
 Dashboard reads through the same tables via Next.js API routes.
 """
+from __future__ import annotations
 from datetime import datetime, timezone
 from supabase import create_client, Client
 

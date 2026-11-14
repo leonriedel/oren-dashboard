@@ -12,18 +12,31 @@ Loops every SCAN_EVERY_MIN:
 
 Run: `python scheduler.py`
 """
+from __future__ import annotations
 import time
 from datetime import datetime, timezone, timedelta
 
 import config
-import data_fetcher
 import signal_engine
 import journal
 import paper_executor
-import oanda_executor
 
-
-EXECUTOR = oanda_executor if config.MODE == "live" else paper_executor
+# Data + executor routing based on MODE
+if config.MODE == "live-bybit":
+    import bybit_data_fetcher as data_fetcher
+    import bybit_executor as _live_exec
+    EXECUTOR = _live_exec
+elif config.MODE == "live":
+    import data_fetcher  # legacy Twelve Data
+    import oanda_executor
+    EXECUTOR = oanda_executor
+else:
+    # paper mode — prefer Bybit public data if universe is crypto, else Twelve Data
+    if any("bybit" in u for u in config.UNIVERSE):
+        import bybit_data_fetcher as data_fetcher
+    else:
+        import data_fetcher
+    EXECUTOR = paper_executor
 
 
 def within_cooldown(symbol: str) -> bool:

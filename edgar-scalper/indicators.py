@@ -4,6 +4,7 @@ EDGAR SCALPER · indicators
 Pure-numpy implementations so we don't depend on TA-Lib's native build.
 Returns the indicator values as columns appended to the input DataFrame.
 """
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 

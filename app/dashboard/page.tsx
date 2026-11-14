@@ -154,6 +154,7 @@ export default function Dashboard() {
     { id: 'estate',  key: '07', label: 'REAL ESTATE', sub: 'Projects & Portfolio', locked: false },
     { id: 'calendar',key: '08', label: 'CALENDAR',    sub: 'Google Calendar Live', locked: false },
     { id: 'scalper', key: '09', label: 'EDGAR SCALPER', sub: 'XAU + FX Trend Scalper', locked: !isAdmin },
+    { id: 'finance', key: '10', label: 'FINANCE',       sub: 'Networth · All Assets',  locked: !isAdmin },
   ]
 
   // System status — Leon, OREN, Edgar
@@ -420,7 +421,7 @@ export default function Dashboard() {
               justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>◇ MODULES</span>
-              <span style={{ color: '#34d399' }}>● 9/9 ACTIVE</span>
+              <span style={{ color: '#34d399' }}>● 10/10 ACTIVE</span>
             </div>
 
             {modules.map(m => (
@@ -431,6 +432,7 @@ export default function Dashboard() {
                   if (m.id === 'calendar') router.push('/dashboard/calendar')
                   else if (m.id === 'radar') router.push('/radar')
                   else if (m.id === 'scalper') router.push('/edgar-scalper')
+                  else if (m.id === 'finance') router.push('/finance')
                   else setScreen(m.id as Screen)
                 }}
                 k={m.key}

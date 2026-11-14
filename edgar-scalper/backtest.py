@@ -9,12 +9,16 @@ Run: `python backtest.py [symbol1,symbol2,...] [--days 60]`
 
 Does NOT touch Supabase. Pure historical sim.
 """
+from __future__ import annotations
 import sys
 from datetime import datetime
 import pandas as pd
 
 import config
-import data_fetcher
+if any("bybit" in u for u in config.UNIVERSE):
+    import bybit_data_fetcher as data_fetcher
+else:
+    import data_fetcher
 import indicators
 
 
@@ -22,9 +26,13 @@ def _args():
     syms = None
     days = 60
     args = sys.argv[1:]
+    skip: set[int] = set()
     for i, a in enumerate(args):
+        if i in skip:
+            continue
         if a == "--days" and i + 1 < len(args):
             days = int(args[i + 1])
+            skip.add(i + 1)
         elif a.startswith("--days="):
             days = int(a.split("=", 1)[1])
         elif not a.startswith("--") and syms is None:
@@ -79,8 +87,7 @@ def _simulate_symbol(df: pd.DataFrame, symbol: str) -> list[dict]:
         atr_v = float(bar["atr"])
 
         if (bar["close"] <= bar["bb_lower"]
-                and bar["rsi"] <= config.RSI_OVERSOLD
-                and bar["macd_hist"] > prev["macd_hist"]):
+                and bar["rsi"] <= config.RSI_OVERSOLD):
             open_trade = {
                 "symbol": symbol, "side": "LONG",
                 "entry_ts": ts.isoformat(), "entry": price,
@@ -89,8 +96,7 @@ def _simulate_symbol(df: pd.DataFrame, symbol: str) -> list[dict]:
             }
             last_entry_ts = ts
         elif (bar["close"] >= bar["bb_upper"]
-                and bar["rsi"] >= config.RSI_OVERBOUGHT
-                and bar["macd_hist"] < prev["macd_hist"]):
+                and bar["rsi"] >= config.RSI_OVERBOUGHT):
             open_trade = {
                 "symbol": symbol, "side": "SHORT",
                 "entry_ts": ts.isoformat(), "entry": price,
@@ -139,7 +145,8 @@ def main():
     for u in universe:
         print(f"\n=== {u['symbol']} ===")
         try:
-            df = data_fetcher.fetch_candles(u["yahoo"], config.TIMEFRAME, period)
+            native = u.get("bybit") or u.get("oanda") or u["symbol"]
+            df = data_fetcher.fetch_candles(native, config.TIMEFRAME, period)
         except Exception as e:
             print(f"  fetch failed: {e}")
             continue

@@ -7,6 +7,7 @@ API so scheduler.py can swap one for the other transparently.
 Kept as a stub now — wire fully once OANDA account is verified and
 the API token lands in .env. Then flip MODE=live.
 """
+from __future__ import annotations
 import config
 import journal
 

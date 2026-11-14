@@ -5,6 +5,7 @@ Opens paper trades in Supabase. Later on each scan iteration, checks if
 any open paper trade has hit its SL or TP and closes it.
 No real orders. No external broker calls.
 """
+from __future__ import annotations
 from datetime import datetime, timezone
 import pandas as pd
 
