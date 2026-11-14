@@ -28,7 +28,7 @@ const DEFAULT_NN = [
   { emoji: '💪', label: 'SPORT' },
   { emoji: '🧘', label: 'MEDITATION' },
   { emoji: '📧', label: 'MAILS' },
-  { emoji: '📸', label: 'INSTA-POST' },
+  { emoji: '🤖', label: 'AI DEV' },
   { emoji: '⚡', label: 'OREN' },
 ]
 
