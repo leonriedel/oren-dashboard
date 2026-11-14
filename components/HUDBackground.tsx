@@ -106,11 +106,11 @@ export default function HUDBackground() {
         if (s.y > h + 10) s.y = -10
         const alpha = 0.3 + (Math.sin(s.twinkle) + 1) * 0.35
         const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 4)
-        g.addColorStop(0, `rgba(255, 215, 60, ${alpha})`)
-        g.addColorStop(1, 'rgba(255, 215, 60, 0)')
+        g.addColorStop(0, `rgba(200, 230, 255, ${alpha})`)
+        g.addColorStop(1, 'rgba(140, 200, 255, 0)')
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 4, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255, 215, 60, ${alpha})`
+        ctx.fillStyle = `rgba(200, 230, 255, ${alpha})`
         ctx.fill()
       }
 
@@ -165,12 +165,12 @@ export default function HUDBackground() {
           const fade = i / sh.trail.length
           ctx.beginPath()
           ctx.moveTo(sh.trail[i].x, sh.trail[i].y); ctx.lineTo(sh.trail[i+1].x, sh.trail[i+1].y)
-          ctx.strokeStyle = `rgba(255, 230, 150, ${fade * 0.7})`
+          ctx.strokeStyle = `rgba(190, 225, 255, ${fade * 0.7})`
           ctx.lineWidth = 1.2 * fade
           ctx.stroke()
         }
         ctx.beginPath(); ctx.arc(sh.x, sh.y, 2, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(255, 240, 180, 0.9)'
+        ctx.fillStyle = 'rgba(230, 245, 255, 0.95)'
         ctx.fill()
       }
 

@@ -923,11 +923,11 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         const r = 1.2 + depth * 1.2
         const alpha = 0.4 + depth * 0.5
         const g = ctx.createRadialGradient(prj.sx, prj.sy, 0, prj.sx, prj.sy, r * 5)
-        g.addColorStop(0, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${alpha})`)
-        g.addColorStop(1, `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0)`)
+        g.addColorStop(0, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`)
+        g.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
         ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r * 5, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill()
         ctx.beginPath(); ctx.arc(prj.sx, prj.sy, r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, ${alpha + 0.2})`
+        ctx.fillStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha + 0.2})`
         ctx.fill()
       }
 
