@@ -353,39 +353,6 @@ export default function Dashboard() {
 
 <div style={{ position: 'relative', width: 620, height: 620, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <HUDCore orbState={orbState} size={620} />
-
-              <div style={{
-                position: 'absolute', top: 18, left: 16,
-                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
-                color: 'rgba(120,180,230,0.6)', pointerEvents: 'none',
-              }}>
-                <div style={{ color: '#80c0ff' }}>◇ ID-OREN-001</div>
-                <div style={{ opacity: 0.6, marginTop: 2 }}>NEURAL CORE</div>
-              </div>
-              <div style={{
-                position: 'absolute', top: 18, right: 16,
-                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
-                color: 'rgba(120,180,230,0.6)', textAlign: 'right', pointerEvents: 'none',
-              }}>
-                <div style={{ color: '#34d399' }}>● OPERATIONAL</div>
-                <div style={{ opacity: 0.6, marginTop: 2 }}>{stateLabel}</div>
-              </div>
-              <div style={{
-                position: 'absolute', bottom: 14, left: 16,
-                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
-                color: 'rgba(120,180,230,0.6)', pointerEvents: 'none',
-              }}>
-                <div>LAT 8.7°S</div>
-                <div style={{ marginTop: 2 }}>LON 115.2°E</div>
-              </div>
-              <div style={{
-                position: 'absolute', bottom: 14, right: 16,
-                fontFamily: 'Space Mono, monospace', fontSize: 8.5, letterSpacing: 2,
-                color: 'rgba(120,180,230,0.6)', textAlign: 'right', pointerEvents: 'none',
-              }}>
-                <div>FREQ 440.0Hz</div>
-                <div style={{ marginTop: 2 }}>AMP 0.85</div>
-              </div>
             </div>
 
             <div style={{ textAlign: 'center', marginTop: -8, marginBottom: 20 }}>
