@@ -68,8 +68,8 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
 
     // ─── Inner wireframe sphere (meridians + parallels) ───
-    const MERIDIANS = 18
-    const PARALLELS = 12
+    const MERIDIANS = 14
+    const PARALLELS = 9
     const PPL = 36
     const meridianLines: V3[][] = []
     const parallelLines: V3[][] = []
@@ -295,30 +295,6 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       ctx.fillStyle = ambient
       ctx.fillRect(0, 0, size, size)
 
-      // ═══ LAYER 1b: MULTIPLE ATMOSPHERE HALOS (concentric faint rings) ═══
-      const atmoLayers = [
-        { r: shellR * 1.00, w: 1.0,  alpha: 0.18 + pulse * 0.08 },
-        { r: shellR * 1.10, w: 0.7,  alpha: 0.10 + pulse * 0.05 },
-        { r: shellR * 1.22, w: 0.5,  alpha: 0.06 + pulse * 0.03 },
-        { r: shellR * 1.35, w: 0.3,  alpha: 0.04 + pulse * 0.02 },
-      ]
-      for (const al of atmoLayers) {
-        ctx.beginPath()
-        ctx.arc(cx, cy, al.r, 0, Math.PI * 2)
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${al.alpha})`
-        ctx.lineWidth = al.w
-        ctx.stroke()
-      }
-      // Soft radial atmosphere fog bands
-      for (const al of atmoLayers.slice(1)) {
-        const g = ctx.createRadialGradient(cx, cy, al.r - 6, cx, cy, al.r + 6)
-        g.addColorStop(0, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
-        g.addColorStop(0.5, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${al.alpha * 0.4})`)
-        g.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
-        ctx.fillStyle = g
-        ctx.fillRect(cx - al.r - 10, cy - al.r - 10, (al.r + 10) * 2, (al.r + 10) * 2)
-      }
-
       // ═══ LAYER 2: ORBITAL RINGS (behind sphere) ═══
       for (const orb of orbits) {
         orb.phase += orb.speed * stateMult
@@ -340,7 +316,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           if (i === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2)
         }
         ctx.closePath()
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.14)`
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.22)`
         ctx.lineWidth = 0.8
         ctx.stroke()
         ctx.restore()
@@ -386,7 +362,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           const pr1 = project(p1), pr2 = project(p2)
           const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphereR + 1) * 0.5
-          const alpha = 0.05 + depth * 0.30
+          const alpha = 0.08 + depth * 0.50
           ctx.beginPath()
           ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
@@ -400,7 +376,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           const pr1 = project(p1), pr2 = project(p2)
           const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphereR + 1) * 0.5
-          const alpha = 0.03 + depth * 0.22
+          const alpha = 0.05 + depth * 0.35
           ctx.beginPath()
           ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
@@ -418,7 +394,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           const pr1 = project(p1), pr2 = project(p2)
           const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphere2R + 1) * 0.5
-          const alpha = 0.04 + depth * 0.22
+          const alpha = 0.07 + depth * 0.35
           ctx.beginPath()
           ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${MAGENTA.r}, ${MAGENTA.g}, ${MAGENTA.b}, ${alpha})`
@@ -437,7 +413,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           const pr1 = project(p1), pr2 = project(p2)
           const avgZ = (p1.z + p2.z) / 2
           const depth = (-avgZ / sphereR + 1) * 0.5
-          const alpha = 0.10 + depth * 0.35
+          const alpha = 0.15 + depth * 0.55
           ctx.beginPath()
           ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
           ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
@@ -446,7 +422,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         }
       }
       drawHelix(helixA, ACC)
-      drawHelix(helixB, { r: 100, g: 230, b: 200 })  // mint-teal strand
+      drawHelix(helixB, { r: 180, g: 100, b: 255 })  // violet strand
 
       // Helix connecting rungs (every 8th point)
       for (let i = 0; i < helixA.length; i += 8) {
@@ -456,7 +432,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         const depth = (-(a.z + b.z)/2 / sphereR + 1) * 0.5
         ctx.beginPath()
         ctx.moveTo(prA.sx, prA.sy); ctx.lineTo(prB.sx, prB.sy)
-        ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.05 + depth * 0.12})`
+        ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.08 + depth * 0.18})`
         ctx.lineWidth = 0.4
         ctx.stroke()
       }
@@ -467,7 +443,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         const pr = project(r)
         const depth = (-r.z / sphereR + 1) * 0.5
         const sr = 1.2 + depth * 1.3
-        const alpha = 0.22 + depth * 0.38
+        const alpha = 0.35 + depth * 0.55
         const g = ctx.createRadialGradient(pr.sx, pr.sy, 0, pr.sx, pr.sy, sr * 3)
         g.addColorStop(0, `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`)
         g.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
@@ -494,7 +470,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           const pr = project(r)
           if (i === 0) ctx.moveTo(pr.sx, pr.sy); else ctx.lineTo(pr.sx, pr.sy)
         }
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.08 + ringPulse * 0.22})`
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.12 + ringPulse * 0.38})`
         ctx.lineWidth = 0.8 + ringPulse * 0.8
         ctx.stroke()
       }
@@ -510,7 +486,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         const x2 = Math.cos(angle) * len
         const y2 = Math.sin(angle) * len
         const grad = ctx.createLinearGradient(0, 0, x2, y2)
-        grad.addColorStop(0, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.15 + pulseFast * 0.07})`)
+        grad.addColorStop(0, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.25 + pulseFast * 0.1})`)
         grad.addColorStop(1, `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0)`)
         ctx.beginPath()
         ctx.moveTo(0, 0); ctx.lineTo(x2, y2)
@@ -568,7 +544,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       for (const e of nEdges) {
         const a = projNodes[e.a], b = projNodes[e.b]
         const avgDepth = (a.depth + b.depth) / 2
-        const baseAlpha = 0.03 + avgDepth * 0.09
+        const baseAlpha = 0.04 + avgDepth * 0.14
         const activeBoost = e.strength * 0.55
         ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy)
         ctx.strokeStyle = e.strength > 0.3
