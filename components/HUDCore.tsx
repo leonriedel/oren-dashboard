@@ -118,6 +118,24 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       sphere2Meridians.push(pts)
     }
 
+    // ─── Third (deepest) nested sphere ───
+    const sphere3R = sphereR * 0.45
+    const SPHERE3_LINES = 6
+    const sphere3Meridians: V3[][] = []
+    for (let m = 0; m < SPHERE3_LINES; m++) {
+      const lineLon = (m / SPHERE3_LINES) * Math.PI * 2
+      const pts: V3[] = []
+      for (let p = 0; p <= PPL; p++) {
+        const lat = -Math.PI / 2 + (p / PPL) * Math.PI
+        pts.push({
+          x: sphere3R * Math.cos(lat) * Math.cos(lineLon),
+          y: sphere3R * Math.sin(lat),
+          z: sphere3R * Math.cos(lat) * Math.sin(lineLon),
+        })
+      }
+      sphere3Meridians.push(pts)
+    }
+
     // ─── DNA double helix winding around main sphere ───
     const HELIX_TURNS = 3.5
     const HELIX_POINTS = 120
@@ -303,10 +321,13 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
       // ═══ LAYER 1b: MULTIPLE ATMOSPHERE HALOS ═══
       const atmoLayers = [
-        { r: shellR * 1.02, w: 1.0, alpha: 0.20 + pulse * 0.08 },
+        { r: shellR * 0.90, w: 1.0, alpha: 0.18 + pulse * 0.08 },
+        { r: shellR * 1.02, w: 0.9, alpha: 0.20 + pulse * 0.08 },
         { r: shellR * 1.12, w: 0.7, alpha: 0.12 + pulse * 0.06 },
-        { r: shellR * 1.24, w: 0.5, alpha: 0.08 + pulse * 0.04 },
-        { r: shellR * 1.38, w: 0.4, alpha: 0.05 + pulse * 0.03 },
+        { r: shellR * 1.20, w: 0.6, alpha: 0.09 + pulse * 0.05 },
+        { r: shellR * 1.28, w: 0.5, alpha: 0.07 + pulse * 0.04 },
+        { r: shellR * 1.36, w: 0.4, alpha: 0.05 + pulse * 0.03 },
+        { r: shellR * 1.44, w: 0.3, alpha: 0.04 + pulse * 0.02 },
       ]
       for (const al of atmoLayers) {
         ctx.beginPath()
@@ -318,9 +339,11 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
       // ═══ LAYER 1c: ANGULAR POLYGON ORBITS (hexagonal / octagonal rings) ═══
       const polyRings = [
-        { sides: 6,  r: shellR * 1.08, speed: 0.0012, tiltX: 0.4,  tiltZ: 0.2  },
-        { sides: 8,  r: shellR * 1.20, speed: -0.0009, tiltX: -0.7, tiltZ: 0.6 },
-        { sides: 12, r: shellR * 1.32, speed: 0.0007, tiltX: 0.3,  tiltZ: -0.8 },
+        { sides: 5,  r: shellR * 1.05, speed: 0.0014,  tiltX: 0.5,  tiltZ: 0.3  },
+        { sides: 6,  r: shellR * 1.14, speed: -0.0010, tiltX: 0.4,  tiltZ: 0.2  },
+        { sides: 8,  r: shellR * 1.22, speed: 0.0009,  tiltX: -0.7, tiltZ: 0.6  },
+        { sides: 10, r: shellR * 1.30, speed: -0.0012, tiltX: 0.9,  tiltZ: -0.4 },
+        { sides: 12, r: shellR * 1.40, speed: 0.0007,  tiltX: 0.3,  tiltZ: -0.8 },
       ]
       for (const ring of polyRings) {
         ctx.beginPath()
@@ -467,6 +490,24 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         }
       }
 
+      // ═══ LAYER 5b2: THIRD NESTED SPHERE (deepest, third rotation axis) ═══
+      const ry3 = t * 0.0055 + mouseRef.current.x * 0.2
+      const rx3 = -0.6 + mouseRef.current.y * -0.15
+      for (const line of sphere3Meridians) {
+        for (let i = 0; i < line.length - 1; i++) {
+          const p1 = rot(line[i], rx3, ry3), p2 = rot(line[i+1], rx3, ry3)
+          const pr1 = project(p1), pr2 = project(p2)
+          const avgZ = (p1.z + p2.z) / 2
+          const depth = (-avgZ / sphere3R + 1) * 0.5
+          const alpha = 0.10 + depth * 0.4
+          ctx.beginPath()
+          ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
+          ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${alpha})`
+          ctx.lineWidth = 0.45
+          ctx.stroke()
+        }
+      }
+
       // ═══ LAYER 5c: DNA HELIX STRANDS ═══
       // Use rotated helix following main sphere rotation
       const ryh = t * 0.0035 + mouseRef.current.x * 0.5
@@ -536,6 +577,37 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         }
         ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.12 + ringPulse * 0.38})`
         ctx.lineWidth = 0.8 + ringPulse * 0.8
+        ctx.stroke()
+      }
+
+      // ═══ LAYER 5e2: GYROSCOPE CAGE — 3 orthogonal rings through sphere ═══
+      const gyroR = sphereR * 1.04
+      const gyroAxes: [number, number][] = [
+        [0, 0],                  // XY plane
+        [Math.PI / 2, 0],        // XZ plane
+        [0, Math.PI / 2],        // YZ plane
+      ]
+      const gyroSpins = [t * 0.003, -t * 0.0025, t * 0.0035]
+      for (let gi = 0; gi < 3; gi++) {
+        const [axX, axZ] = gyroAxes[gi]
+        const spin = gyroSpins[gi]
+        ctx.beginPath()
+        for (let i = 0; i <= 48; i++) {
+          const a = (i / 48) * Math.PI * 2 + spin
+          const px = Math.cos(a) * gyroR
+          const pz = Math.sin(a) * gyroR
+          const p3 = { x: px, y: 0, z: pz }
+          // apply orthogonal rotation
+          const ty = p3.y * Math.cos(axX) - p3.z * Math.sin(axX)
+          const tz = p3.y * Math.sin(axX) + p3.z * Math.cos(axX)
+          const tx2 = p3.x * Math.cos(axZ) - ty * Math.sin(axZ)
+          const ty2 = p3.x * Math.sin(axZ) + ty * Math.cos(axZ)
+          const rotated = rot({ x: tx2, y: ty2, z: tz }, rx, ry)
+          const prj = project(rotated)
+          if (i === 0) ctx.moveTo(prj.sx, prj.sy); else ctx.lineTo(prj.sx, prj.sy)
+        }
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.22)`
+        ctx.lineWidth = 0.9
         ctx.stroke()
       }
 
