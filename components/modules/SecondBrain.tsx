@@ -5,6 +5,8 @@ import ModuleLayout from '@/components/ModuleLayout'
 import type { User } from '@supabase/supabase-js'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
+import dynamic from 'next/dynamic'
+const DayCoreGL = dynamic(() => import('@/components/secondbrain/DayCoreGL'), { ssr: false })
 
 interface Props { user: User; onBack: () => void }
 
@@ -63,9 +65,6 @@ export default function SecondBrain({ user, onBack }: Props) {
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [briefingError, setBriefingError] = useState<string | null>(null)
 
-  const [review, setReview] = useState({ good: '', bad: '', tomorrow: '' })
-  const [reviewSaved, setReviewSaved] = useState<string | null>(null)
-  const [showHistory, setShowHistory] = useState(false)
 
   // clock
   useEffect(() => {
@@ -107,8 +106,6 @@ export default function SecondBrain({ user, onBack }: Props) {
     const map: Record<string, DayRow> = {}
     for (const row of (d.data as DayRow[]) || []) map[row.day] = row
     setDays(map)
-    const t = map[dayKey(new Date())]
-    if (t) setReview({ good: t.review_good || '', bad: t.review_bad || '', tomorrow: t.review_tomorrow || '' })
   }
 
   async function loadBriefing(force: boolean) {
@@ -229,12 +226,6 @@ export default function SecondBrain({ user, onBack }: Props) {
     setGoals(prev => prev.filter(g => g.id !== id))
   }
 
-  // ─── review ───
-  async function saveReview() {
-    await upsertDay({ review_good: review.good, review_bad: review.bad, review_tomorrow: review.tomorrow })
-    setReviewSaved(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))
-  }
-
   // ─── derived ───
   const openPrios = prios.filter(p => !p.done)
   const donePrios = prios.filter(p => p.done)
@@ -253,10 +244,6 @@ export default function SecondBrain({ user, onBack }: Props) {
 
   const week = isoWeek(now)
   const last7 = Array.from({ length: 7 }, (_, i) => addDays(now, i - 6))
-  const pastReviews = Object.values(days)
-    .filter(d => d.day !== today && (d.review_good || d.review_bad || d.review_tomorrow))
-    .sort((a, b) => b.day.localeCompare(a.day))
-    .slice(0, 7)
 
   return (
     <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor={BLUE} sub="Daily Operations & Execution" iconBg="linear-gradient(135deg, rgba(60,120,200,0.4), rgba(100,180,255,0.2))">
@@ -520,40 +507,22 @@ export default function SecondBrain({ user, onBack }: Props) {
         )}
       </Panel>
 
-      {/* ═══ EVENING REVIEW ═══ */}
-      <Panel style={{ marginTop: 18, borderColor: isEvening ? 'rgba(251,191,36,0.22)' : undefined }}>
-        <Title color={isEvening ? GOLD : BLUE} right={reviewSaved ? `SAVED ${reviewSaved}` : isEvening ? 'TIME TO CLOSE THE DAY' : 'END OF DAY'}>DAILY REVIEW</Title>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12 }}>
-          {([
-            ['good', 'WHAT WENT WELL', MINT],
-            ['bad', 'WHAT DIDN’T', '#f87171'],
-            ['tomorrow', 'FOCUS TOMORROW', GOLD],
-          ] as const).map(([k, label, c]) => (
-            <div key={k}>
-              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: c, marginBottom: 6 }}>{label}</div>
-              <textarea
-                value={review[k]}
-                onChange={e => setReview(r => ({ ...r, [k]: e.target.value }))}
-                onBlur={saveReview}
-                rows={3}
-                style={{ ...inputStyle, width: '100%', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }}
-              />
-            </div>
-          ))}
+      {/* ═══ DAY CORE ═══ */}
+      <Panel style={{ marginTop: 18, padding: 0 }}>
+        <div style={{ position: 'absolute', top: 18, left: 20, zIndex: 2 }}>
+          <Title color={MINT}>DAY CORE</Title>
         </div>
-        {pastReviews.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <button onClick={() => setShowHistory(v => !v)} style={ghostBtn}>{showHistory ? '▾' : '▸'} JOURNAL · {pastReviews.length} DAYS</button>
-            {showHistory && pastReviews.map(d => (
-              <div key={d.day} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '90px 1fr 1fr 1fr', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(80,180,255,0.05)', fontSize: 12, color: 'rgba(200,225,250,0.7)', lineHeight: 1.5 }}>
-                <div style={{ fontFamily: MONO, fontSize: 10, color: DIM }}>{new Date(d.day + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}</div>
-                <div>{d.review_good}</div>
-                <div>{d.review_bad}</div>
-                <div style={{ color: 'rgba(251,191,36,0.75)' }}>{d.review_tomorrow}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        <div style={{ position: 'absolute', top: 18, right: 20, zIndex: 2, fontFamily: MONO, fontSize: 9, letterSpacing: 1.5, color: DIM, textAlign: 'right', lineHeight: 1.8 }}>
+          <div><span style={{ color: GOLD }}>◆</span> TOP 3 PRIORITIES</div>
+          <div><span style={{ color: MINT }}>●</span> HABITS · CLICK TO CHECK</div>
+        </div>
+        <DayCoreGL
+          height={isMobile ? 340 : 460}
+          score={score}
+          prios={openPrios.slice(0, 3).map(p => ({ id: p.id, text: p.text, done: false })).concat(donePrios.slice(0, Math.max(0, 3 - openPrios.length)).map(p => ({ id: p.id, text: p.text, done: true })))}
+          habits={habits.map(h => ({ id: h.id, label: h.label, emoji: h.emoji, done: todayDone.includes(h.id), streak: streak(h.id) }))}
+          onToggleHabit={toggleHabit}
+        />
       </Panel>
 
       <style>{`
