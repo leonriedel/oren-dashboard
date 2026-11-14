@@ -194,10 +194,10 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     // ─── Floating ambient particles (orbit randomly) ───
     type Particle = { angle: number; distance: number; speed: number; size: number; tiltX: number; tiltZ: number; phase: number }
     const particles: Particle[] = []
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 110; i++) {
       particles.push({
         angle: Math.random() * Math.PI * 2,
-        distance: shellR * (0.6 + Math.random() * 0.5),
+        distance: shellR * (0.7 + Math.random() * 0.75),
         speed: (Math.random() - 0.5) * 0.004,
         size: 0.6 + Math.random() * 1.2,
         tiltX: (Math.random() - 0.5) * 2,
@@ -233,6 +233,12 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         speed: 0.004 + Math.random() * 0.007,
       })
     }
+
+    // ─── Constellation lines: random faint connections between distant particles ───
+    type ConstLine = { a: number; b: number; strength: number; maxLife: number }
+    const constLines: ConstLine[] = []
+    let nextConstTime = 30
+    
 
     // ─── Traveling impulses on neural edges ───
     type Impulse = { edgeIdx: number; direction: 1 | -1; progress: number; speed: number }
@@ -294,6 +300,64 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       ambient.addColorStop(1, 'rgba(0,0,0,0)')
       ctx.fillStyle = ambient
       ctx.fillRect(0, 0, size, size)
+
+      // ═══ LAYER 1b: MULTIPLE ATMOSPHERE HALOS ═══
+      const atmoLayers = [
+        { r: shellR * 1.02, w: 1.0, alpha: 0.20 + pulse * 0.08 },
+        { r: shellR * 1.12, w: 0.7, alpha: 0.12 + pulse * 0.06 },
+        { r: shellR * 1.24, w: 0.5, alpha: 0.08 + pulse * 0.04 },
+        { r: shellR * 1.38, w: 0.4, alpha: 0.05 + pulse * 0.03 },
+      ]
+      for (const al of atmoLayers) {
+        ctx.beginPath()
+        ctx.arc(cx, cy, al.r, 0, Math.PI * 2)
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${al.alpha})`
+        ctx.lineWidth = al.w
+        ctx.stroke()
+      }
+
+      // ═══ LAYER 1c: ANGULAR POLYGON ORBITS (hexagonal / octagonal rings) ═══
+      const polyRings = [
+        { sides: 6,  r: shellR * 1.08, speed: 0.0012, tiltX: 0.4,  tiltZ: 0.2  },
+        { sides: 8,  r: shellR * 1.20, speed: -0.0009, tiltX: -0.7, tiltZ: 0.6 },
+        { sides: 12, r: shellR * 1.32, speed: 0.0007, tiltX: 0.3,  tiltZ: -0.8 },
+      ]
+      for (const ring of polyRings) {
+        ctx.beginPath()
+        for (let i = 0; i <= ring.sides; i++) {
+          const a = (i / ring.sides) * Math.PI * 2 + t * ring.speed
+          const px = Math.cos(a) * ring.r
+          const pz = Math.sin(a) * ring.r
+          const p3 = { x: px, y: 0, z: pz }
+          const ty = p3.y * Math.cos(ring.tiltX) - p3.z * Math.sin(ring.tiltX)
+          const tz = p3.y * Math.sin(ring.tiltX) + p3.z * Math.cos(ring.tiltX)
+          const tx2 = p3.x * Math.cos(ring.tiltZ) - ty * Math.sin(ring.tiltZ)
+          const ty2 = p3.x * Math.sin(ring.tiltZ) + ty * Math.cos(ring.tiltZ)
+          const rotated = rot({ x: tx2, y: ty2, z: tz }, rx, ry)
+          const prj = project(rotated)
+          if (i === 0) ctx.moveTo(prj.sx, prj.sy); else ctx.lineTo(prj.sx, prj.sy)
+        }
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, 0.18)`
+        ctx.lineWidth = 0.7
+        ctx.stroke()
+        // Vertex dots on the polygon
+        for (let i = 0; i < ring.sides; i++) {
+          const a = (i / ring.sides) * Math.PI * 2 + t * ring.speed
+          const px = Math.cos(a) * ring.r
+          const pz = Math.sin(a) * ring.r
+          const p3 = { x: px, y: 0, z: pz }
+          const ty = p3.y * Math.cos(ring.tiltX) - p3.z * Math.sin(ring.tiltX)
+          const tz = p3.y * Math.sin(ring.tiltX) + p3.z * Math.cos(ring.tiltX)
+          const tx2 = p3.x * Math.cos(ring.tiltZ) - ty * Math.sin(ring.tiltZ)
+          const ty2 = p3.x * Math.sin(ring.tiltZ) + ty * Math.cos(ring.tiltZ)
+          const rotated = rot({ x: tx2, y: ty2, z: tz }, rx, ry)
+          const prj = project(rotated)
+          const depth = (-rotated.z / ring.r + 1) * 0.5
+          ctx.beginPath(); ctx.arc(prj.sx, prj.sy, 1.4, 0, Math.PI * 2)
+          ctx.fillStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.3 + depth * 0.5})`
+          ctx.fill()
+        }
+      }
 
       // ═══ LAYER 2: ORBITAL RINGS (behind sphere) ═══
       for (const orb of orbits) {
@@ -748,6 +812,40 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.lineTo(bP.sx, bP.sy)
         ctx.strokeStyle = `rgba(${WHITE.r}, ${WHITE.g}, ${WHITE.b}, ${0.7 * fade})`
         ctx.lineWidth = 0.8
+        ctx.stroke()
+      }
+
+      // ═══ LAYER Z: CONSTELLATION LINES between distant particles ═══
+      nextConstTime--
+      if (nextConstTime <= 0 && constLines.length < 6) {
+        // pick two particles that are both reasonably far out
+        const far = particles.map((_, i) => i).filter(i => particles[i].distance > shellR * 1.0)
+        if (far.length >= 2) {
+          const a = far[Math.floor(Math.random() * far.length)]
+          let b = far[Math.floor(Math.random() * far.length)]
+          if (b === a) b = far[(far.indexOf(b) + 1) % far.length]
+          constLines.push({ a, b, strength: 0, maxLife: 60 + Math.random() * 90 })
+        }
+        nextConstTime = 25 + Math.random() * 40
+      }
+      for (let ci = constLines.length - 1; ci >= 0; ci--) {
+        const cL = constLines[ci]
+        cL.strength = Math.min(1, cL.strength + 0.03)
+        cL.maxLife--
+        if (cL.maxLife <= 0) { cL.strength -= 0.025; if (cL.strength <= 0) { constLines.splice(ci, 1); continue } }
+        const projP = (idx: number) => {
+          const p = particles[idx]
+          const px = Math.cos(p.angle) * p.distance
+          const pz = Math.sin(p.angle) * p.distance
+          const py = Math.sin(p.phase + t * 0.01) * p.distance * 0.1
+          const tx = px, ty = py * Math.cos(p.tiltX) - pz * Math.sin(p.tiltX), tz = py * Math.sin(p.tiltX) + pz * Math.cos(p.tiltX)
+          return project(rot({ x: tx, y: ty, z: tz }, rx, ry))
+        }
+        const pA = projP(cL.a), pB = projP(cL.b)
+        ctx.beginPath()
+        ctx.moveTo(pA.sx, pA.sy); ctx.lineTo(pB.sx, pB.sy)
+        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${cL.strength * 0.25})`
+        ctx.lineWidth = 0.5
         ctx.stroke()
       }
 
