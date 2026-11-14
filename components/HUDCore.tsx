@@ -182,9 +182,9 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     // ─── Orbital rings (3 rings at different 3D tilts) ───
     type Orbit = { tiltX: number; tiltZ: number; r: number; speed: number; particleCount: number; phase: number }
     const orbits: Orbit[] = [
-      { tiltX: 0.6, tiltZ: 0.3, r: shellR * 1.08, speed: 0.008, particleCount: 1, phase: 0 },
-      { tiltX: -0.4, tiltZ: 0.9, r: shellR * 1.18, speed: -0.006, particleCount: 1, phase: Math.PI/3 },
-      { tiltX: 0.9, tiltZ: -0.5, r: shellR * 1.28, speed: 0.010, particleCount: 1, phase: Math.PI/1.5 },
+      { tiltX: 0.6, tiltZ: 0.3, r: shellR * 0.95, speed: 0.008, particleCount: 1, phase: 0 },
+      { tiltX: -0.4, tiltZ: 0.9, r: shellR * 1.02, speed: -0.006, particleCount: 1, phase: Math.PI/3 },
+      { tiltX: 0.9, tiltZ: -0.5, r: shellR * 1.10, speed: 0.010, particleCount: 1, phase: Math.PI/1.5 },
     ]
 
     // ─── Floating ambient particles (orbit randomly) ───
@@ -193,7 +193,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     for (let i = 0; i < 70; i++) {
       particles.push({
         angle: Math.random() * Math.PI * 2,
-        distance: shellR * (1.05 + Math.random() * 0.4),
+        distance: shellR * (0.6 + Math.random() * 0.5),
         speed: (Math.random() - 0.5) * 0.004,
         size: 0.6 + Math.random() * 1.2,
         tiltX: (Math.random() - 0.5) * 2,
@@ -269,7 +269,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       const rx = -0.32 + mouseRef.current.y * -0.35
 
       // ═══ LAYER 1: AMBIENT NEBULA ═══
-      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.55)
+      const ambient = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.42)
       ambient.addColorStop(0, `rgba(${DEEP.r}, ${DEEP.g}, ${DEEP.b}, ${0.13 + pulse * 0.08})`)
       ambient.addColorStop(0.3, `rgba(${MAGENTA.r}, 80, 180, ${0.04 + pulse * 0.03})`)
       ambient.addColorStop(0.6, `rgba(40, 80, 140, ${0.05 + pulse * 0.02})`)
@@ -564,7 +564,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
           stream.progress = 0
           stream.speed = 0.003 + Math.random() * 0.007
         }
-        const startR = size * 0.44, endR = coreR * 2
+        const startR = size * 0.36, endR = coreR * 2
         const r = startR - (startR - endR) * stream.progress
         const tailR = startR - (startR - endR) * Math.max(0, stream.progress - 0.18)
         const x1 = cx + Math.cos(stream.angle) * r
@@ -580,36 +580,10 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.fillStyle = `rgba(${ACC.r}, ${ACC.g}, ${ACC.b}, 0.95)`; ctx.fill()
       }
 
-      // ═══ LAYER 12: ROTATING HEX GLYPHS (outer edge) ═══
-      glyphRefreshTimer++
-      if (glyphRefreshTimer > 80) {
-        glyphRefreshTimer = 0
-        const idx = Math.floor(Math.random() * glyphs.length)
-        glyphs[idx].char = GLYPHS[Math.floor(Math.random() * GLYPHS.length)]
-      }
-      ctx.save()
-      ctx.translate(cx, cy)
-      ctx.rotate(t * 0.0008)
-      ctx.font = '10px "Space Mono", monospace'
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      const glyphR = size * 0.485
-      for (const g of glyphs) {
-        const x = Math.cos(g.angle) * glyphR
-        const y = Math.sin(g.angle) * glyphR
-        ctx.save()
-        ctx.translate(x, y)
-        ctx.rotate(g.angle + Math.PI / 2)
-        ctx.fillStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${0.25 + pulseFast * 0.2})`
-        ctx.fillText(g.char, 0, 0)
-        ctx.restore()
-      }
-      ctx.restore()
-
       // ═══ LAYER 13: CHROMATIC ABERRATION EDGE SHIMMER ═══
       ctx.save()
       ctx.globalCompositeOperation = 'screen'
-      const chroma = ctx.createRadialGradient(cx, cy, size * 0.35, cx, cy, size * 0.5)
+      const chroma = ctx.createRadialGradient(cx, cy, size * 0.28, cx, cy, size * 0.42)
       chroma.addColorStop(0, 'rgba(0,0,0,0)')
       chroma.addColorStop(0.7, `rgba(255, 60, 150, ${0.015 + pulseFast * 0.015})`)
       chroma.addColorStop(1, `rgba(100, 220, 255, ${0.02 + pulseFast * 0.015})`)
@@ -618,7 +592,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       ctx.restore()
 
       // ═══ LAYER 14: STATE INDICATOR ARC ═══
-      const stateArcR = size * 0.465
+      const stateArcR = size * 0.38
       ctx.save()
       ctx.translate(cx, cy)
       ctx.rotate(t * 0.0025 * stateMult)
@@ -655,8 +629,8 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ref={canvasRef}
         style={{
           display: 'block',
-          WebkitMaskImage: 'radial-gradient(circle, black 55%, transparent 88%)',
-          maskImage: 'radial-gradient(circle, black 55%, transparent 88%)',
+          WebkitMaskImage: 'radial-gradient(circle, black 42%, rgba(0,0,0,0.5) 70%, transparent 95%)',
+          maskImage: 'radial-gradient(circle, black 42%, rgba(0,0,0,0.5) 70%, transparent 95%)',
         }}
       />
     </div>
