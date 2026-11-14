@@ -360,7 +360,7 @@ export default function Dashboard() {
             </div>
 
             <div style={{ position: 'relative', width: 540, height: 540, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <HUDCore orbState={orbState} size={540} />
+              <HUDCore orbState={orbState} size={620} />
 
               <div style={{
                 position: 'absolute', top: 18, left: 16,

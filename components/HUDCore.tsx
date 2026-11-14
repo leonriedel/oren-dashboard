@@ -48,9 +48,9 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
     const cx = size / 2
     const cy = size / 2
-    const sphereR = size * 0.30
-    const shellR = size * 0.38
-    const nodeSphereR = sphereR * 0.70
+    const sphereR = size * 0.38
+    const shellR = size * 0.44
+    const nodeSphereR = sphereR * 0.78
     const focal = size * 0.9
 
     // Mouse parallax
@@ -65,54 +65,11 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
 
     type V3 = { x: number; y: number; z: number }
 
-    // ─── Geodesic icosahedron shell (12 vertices, 20 triangle faces) ───
-    const PHI = (1 + Math.sqrt(5)) / 2
-    const icoVerts: V3[] = [
-      { x: -1, y: PHI, z: 0 }, { x: 1, y: PHI, z: 0 },
-      { x: -1, y: -PHI, z: 0 }, { x: 1, y: -PHI, z: 0 },
-      { x: 0, y: -1, z: PHI }, { x: 0, y: 1, z: PHI },
-      { x: 0, y: -1, z: -PHI }, { x: 0, y: 1, z: -PHI },
-      { x: PHI, y: 0, z: -1 }, { x: PHI, y: 0, z: 1 },
-      { x: -PHI, y: 0, z: -1 }, { x: -PHI, y: 0, z: 1 },
-    ].map(v => {
-      const len = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
-      return { x: v.x / len * shellR, y: v.y / len * shellR, z: v.z / len * shellR }
-    })
-    const icoFaces: [number,number,number][] = [
-      [0,11,5],[0,5,1],[0,1,7],[0,7,10],[0,10,11],
-      [1,5,9],[5,11,4],[11,10,2],[10,7,6],[7,1,8],
-      [3,9,4],[3,4,2],[3,2,6],[3,6,8],[3,8,9],
-      [4,9,5],[2,4,11],[6,2,10],[8,6,7],[9,8,1],
-    ]
-    // Subdivide each face once → 80 smaller triangles for denser geodesic
-    const subdivided: [V3,V3,V3][] = []
-    const midpoint = (a: V3, b: V3) => {
-      const m = { x: (a.x+b.x)/2, y: (a.y+b.y)/2, z: (a.z+b.z)/2 }
-      const len = Math.sqrt(m.x*m.x + m.y*m.y + m.z*m.z)
-      return { x: m.x/len*shellR, y: m.y/len*shellR, z: m.z/len*shellR }
-    }
-    for (const [ia, ib, ic] of icoFaces) {
-      const a = icoVerts[ia], b = icoVerts[ib], c = icoVerts[ic]
-      const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a)
-      subdivided.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca])
-    }
-    // Unique edges from subdivided faces (for wireframe draw)
-    const edgeKey = (a: V3, b: V3) => {
-      const k1 = `${a.x.toFixed(3)},${a.y.toFixed(3)},${a.z.toFixed(3)}`
-      const k2 = `${b.x.toFixed(3)},${b.y.toFixed(3)},${b.z.toFixed(3)}`
-      return k1 < k2 ? k1 + '|' + k2 : k2 + '|' + k1
-    }
-    const edgeMap = new Map<string, [V3,V3]>()
-    for (const [a,b,c] of subdivided) {
-      for (const [p, q] of [[a,b],[b,c],[c,a]] as [V3,V3][]) {
-        edgeMap.set(edgeKey(p, q), [p, q])
-      }
-    }
-    const shellEdges = Array.from(edgeMap.values())
+
 
     // ─── Inner wireframe sphere (meridians + parallels) ───
-    const MERIDIANS = 10
-    const PARALLELS = 6
+    const MERIDIANS = 14
+    const PARALLELS = 9
     const PPL = 36
     const meridianLines: V3[][] = []
     const parallelLines: V3[][] = []
@@ -146,7 +103,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
     // ─── Neural nodes ───
     type Node = { x: number; y: number; z: number; r: number; activation: number; nextFire: number }
     const nodes: Node[] = []
-    const NODE_COUNT = 48
+    const NODE_COUNT = 60
     for (let i = 0; i < NODE_COUNT; i++) {
       let x = 0, y = 0, z = 0
       for (let t2 = 0; t2 < 20; t2++) {
@@ -329,20 +286,6 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
         ctx.fill()
       }
 
-      // ═══ LAYER 4: GEODESIC ICOSAHEDRON SHELL ═══
-      for (const [p1, p2] of shellEdges) {
-        const r1 = rot(p1, rx, ry), r2 = rot(p2, rx, ry)
-        const pr1 = project(r1), pr2 = project(r2)
-        const avgZ = (r1.z + r2.z) / 2
-        const depth = (-avgZ / shellR + 1) * 0.5
-        const alpha = 0.06 + depth * 0.45
-        ctx.beginPath()
-        ctx.moveTo(pr1.sx, pr1.sy); ctx.lineTo(pr2.sx, pr2.sy)
-        ctx.strokeStyle = `rgba(${CYAN.r}, ${CYAN.g}, ${CYAN.b}, ${alpha})`
-        ctx.lineWidth = 0.6
-        ctx.stroke()
-      }
-
       // ═══ LAYER 5: INNER WIREFRAME SPHERE ═══
       for (const line of meridianLines) {
         for (let i = 0; i < line.length - 1; i++) {
@@ -437,7 +380,7 @@ export default function HUDCore({ orbState = 'idle', size = 540 }: { orbState?: 
       }
 
       // ═══ LAYER 9: CORE NUCLEUS ═══
-      const coreR = size * 0.04 + Math.sin(t * 0.05) * 3 * stateMult
+      const coreR = size * 0.05 + Math.sin(t * 0.05) * 3 * stateMult
       const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 8)
       halo.addColorStop(0, `rgba(140, 210, 255, ${0.3 + pulse * 0.2 * stateMult})`)
       halo.addColorStop(0.3, `rgba(80, 160, 240, ${0.15 + pulse * 0.1 * stateMult})`)
