@@ -17,8 +17,6 @@ export function Card({ children, style }: { children: React.ReactNode; style?: R
         position: 'absolute', top: 0, left: 0, right: 0, height: 1,
         background: 'linear-gradient(90deg, transparent, rgba(120,200,255,0.55), transparent)',
       }} />
-      <div style={{ position: 'absolute', top: 3, left: 3, width: 6, height: 6, borderTop: '1px solid rgba(120,200,255,0.45)', borderLeft: '1px solid rgba(120,200,255,0.45)' }} />
-      <div style={{ position: 'absolute', top: 3, right: 3, width: 6, height: 6, borderTop: '1px solid rgba(120,200,255,0.45)', borderRight: '1px solid rgba(120,200,255,0.45)' }} />
       {children}
     </div>
   )

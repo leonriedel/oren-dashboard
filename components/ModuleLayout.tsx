@@ -33,12 +33,6 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
           backgroundSize: '48px 48px',
         }} />
 
-        {/* corner brackets */}
-        <CornerBracket pos="tl" />
-        <CornerBracket pos="tr" />
-        <CornerBracket pos="bl" />
-        <CornerBracket pos="br" />
-
         {/* HEADER */}
         <div style={{
           position: 'sticky', top: 0, zIndex: 20,
@@ -110,15 +104,4 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
       </div>
     </>
   )
-}
-
-function CornerBracket({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) {
-  const s = 28, t = 16
-  const styles: any = {
-    tl: { top: t, left: t, borderLeft: '1px solid #80c0ff', borderTop: '1px solid #80c0ff' },
-    tr: { top: t, right: t, borderRight: '1px solid #80c0ff', borderTop: '1px solid #80c0ff' },
-    bl: { bottom: t, left: t, borderLeft: '1px solid #80c0ff', borderBottom: '1px solid #80c0ff' },
-    br: { bottom: t, right: t, borderRight: '1px solid #80c0ff', borderBottom: '1px solid #80c0ff' },
-  }
-  return <div style={{ position: 'fixed', width: s, height: s, zIndex: 30, opacity: 0.35, pointerEvents: 'none', ...styles[pos] }} />
 }
