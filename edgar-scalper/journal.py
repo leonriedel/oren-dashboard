@@ -40,7 +40,8 @@ def log_signal(sig_dict: dict, dry_run: bool = True) -> str | None:
         return None
 
 
-def open_trade(sig_row_id: str, sig_dict: dict, size: float, dry_run: bool = True) -> str | None:
+def open_trade(sig_row_id: str, sig_dict: dict, size: float, dry_run: bool = True,
+               broker: str | None = None, note: str | None = None) -> str | None:
     row = {
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "symbol":    sig_dict["symbol"],
@@ -51,8 +52,10 @@ def open_trade(sig_row_id: str, sig_dict: dict, size: float, dry_run: bool = Tru
         "tp":        sig_dict["tp"],
         "signal_id": sig_row_id,
         "dry_run":   dry_run,
-        "broker":    "paper" if dry_run else "oanda-practice",
+        "broker":    broker or ("paper" if dry_run else "oanda-practice"),
     }
+    if note:
+        row["note"] = note
     try:
         res = client().table("edgar_trades").insert(row).execute()
         trade_id = res.data[0]["id"] if res.data else None

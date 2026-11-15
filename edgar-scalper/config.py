@@ -8,6 +8,8 @@ Env vars (set in .env or VPS environment):
   OANDA_API_TOKEN         (only for live)
   OANDA_ACCOUNT_ID        (only for live)
   OANDA_ENVIRONMENT       practice | live  (default: practice)
+  CAPITAL_API_KEY / CAPITAL_IDENTIFIER / CAPITAL_PASSWORD / CAPITAL_ENV (demo|live)
+    → MODE=capital trades on Capital.com (demo account first)
 """
 from __future__ import annotations
 import os
@@ -15,9 +17,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
-MODE = os.getenv("MODE", "paper").lower()  # paper | live
+MODE = os.getenv("MODE", "paper").lower()  # paper | live | live-bybit | capital
 
 SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL") or ""
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
@@ -29,9 +31,9 @@ OANDA_ENVIRONMENT = os.getenv("OANDA_ENVIRONMENT", "practice")
 # ─── trading universe ────────────────────────────────────────────
 # Yahoo-Finance tickers (for data), OANDA names (for execution)
 UNIVERSE = [
-    {"symbol": "BTC/USDT", "bybit": "BTCUSDT"},
-    {"symbol": "ETH/USDT", "bybit": "ETHUSDT"},
-    {"symbol": "SOL/USDT", "bybit": "SOLUSDT"},
+    {"symbol": "XAU/USD", "capital": "GOLD"},
+    {"symbol": "EUR/USD", "capital": "EURUSD"},
+    {"symbol": "USD/JPY", "capital": "USDJPY"},
 ]
 
 # ─── strategy params ─────────────────────────────────────────────

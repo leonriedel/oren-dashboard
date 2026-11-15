@@ -22,7 +22,11 @@ import journal
 import paper_executor
 
 # Data + executor routing based on MODE
-if config.MODE == "live-bybit":
+if config.MODE == "capital":
+    import capital_data_fetcher as data_fetcher
+    import capital_executor as _cap_exec
+    EXECUTOR = _cap_exec
+elif config.MODE == "live-bybit":
     import bybit_data_fetcher as data_fetcher
     import bybit_executor as _live_exec
     EXECUTOR = _live_exec
@@ -37,6 +41,13 @@ else:
     else:
         import data_fetcher
     EXECUTOR = paper_executor
+
+
+def real_money() -> bool:
+    if config.MODE == "capital":
+        import capital_client
+        return capital_client.env() == "live"
+    return config.MODE in ("live", "live-bybit")
 
 
 def within_cooldown(symbol: str) -> bool:
@@ -81,7 +92,10 @@ def tick(state: dict) -> None:
         print(f"[edgar] CLOSED {c['symbol']} {c['side']} → {c['exit_reason']} · pnl ${c.get('pnl',0):.2f}")
 
     # 5. scan for new signals
-    open_cnt = len(journal.open_positions())
+    opens_now = journal.open_positions()
+    if config.MODE == "capital":
+        opens_now = [t for t in opens_now if (t.get("note") or "").startswith("capital:")]
+    open_cnt = len(opens_now)
     for u in config.UNIVERSE:
         if open_cnt >= config.MAX_OPEN_POSITIONS:
             print(f"[edgar] max positions ({config.MAX_OPEN_POSITIONS}) — skipping further scans")
@@ -100,7 +114,7 @@ def tick(state: dict) -> None:
         sig_dict = signal_engine.signal_to_dict(sig)
         print(f"[edgar] SIGNAL {sym} {sig.side} conf={sig.confidence} @ {sig.price}")
 
-        sig_id = journal.log_signal(sig_dict, dry_run=(config.MODE != "live"))
+        sig_id = journal.log_signal(sig_dict, dry_run=not real_money())
         if not sig_id:
             continue
 
@@ -138,24 +152,31 @@ def _snapshot_equity(state: dict, current_prices: dict[str, float]) -> None:
             unreal += (t["entry"] - p) * t["size"]
 
     nav = starting + closed_pnl + unreal
+    if hasattr(EXECUTOR, "account_nav"):
+        broker_nav = EXECUTOR.account_nav()
+        if broker_nav:
+            nav = broker_nav
     state["nav"] = nav
     journal.snapshot_equity(nav=nav, cash=starting + closed_pnl,
                             unrealized=unreal, open_positions=len(opens),
-                            dry_run=(config.MODE != "live"))
+                            dry_run=not real_money())
     print(f"[edgar] equity snapshot · NAV ${nav:.2f} · unreal ${unreal:.2f} · opens {len(opens)}")
 
 
 def main():
     print(f"[edgar] starting · version {config.VERSION} · mode {config.MODE}")
+    start_nav = 10_000.0
+    if hasattr(EXECUTOR, "account_nav"):
+        start_nav = EXECUTOR.account_nav() or start_nav
     state = {
-        "starting_nav":   10_000.0,
-        "nav":            10_000.0,
+        "starting_nav":   start_nav,
+        "nav":            start_nav,
         "last_equity_at": datetime.now(timezone.utc) - timedelta(hours=1),
     }
     # initial heartbeat + equity so dashboard lights up
     journal.heartbeat(config.MODE, [u["symbol"] for u in config.UNIVERSE], config.VERSION)
     journal.snapshot_equity(nav=state["nav"], cash=state["nav"], unrealized=0, open_positions=0,
-                            dry_run=(config.MODE != "live"))
+                            dry_run=not real_money())
 
     while True:
         try:
