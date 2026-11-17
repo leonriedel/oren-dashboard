@@ -7,6 +7,7 @@ import type { User } from '@supabase/supabase-js'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useRole } from '@/lib/useRole'
 import { TYPE_COLORS } from '@/components/secondbrain/KnowledgeGraph'
+import NotePage, { checklistProgress, type PageNote } from '@/components/secondbrain/NotePage'
 
 const KnowledgeGraph = dynamic(() => import('@/components/secondbrain/KnowledgeGraph'), { ssr: false })
 
@@ -614,11 +615,12 @@ export default function SecondBrain({ user, onBack }: Props) {
         </>
       )}
 
-      {/* ═══ DRAWER ═══ */}
+      {/* ═══ NOTE PAGE ═══ */}
       {selected && (
-        <NoteDrawer
-          n={selected} notes={notes} projectNames={projectNames} isMobile={isMobile}
-          onClose={() => setSelectedId(null)} onPatch={p => patchNote(selected.id, p)} onDelete={() => deleteNote(selected.id)}
+        <NotePage
+          n={selected as PageNote} notes={notes as PageNote[]} projectNames={projectNames} isAdmin={isAdmin} isMobile={isMobile}
+          getToken={token}
+          onClose={() => setSelectedId(null)} onPatch={p => patchNote(selected.id, p as Partial<Note>)} onDelete={() => deleteNote(selected.id)}
           onToday={() => sendToToday(selected)} onOpen={id => setSelectedId(id)}
           onTag={t => { setTagFilter(t); setTab('stream'); setSelectedId(null) }}
         />
@@ -772,92 +774,6 @@ function ProcessInbox({ items, projectNames, onClose, onToday, onProject, onKeep
   )
 }
 
-// ─── note drawer ───
-function NoteDrawer({ n, notes, projectNames, isMobile, onClose, onPatch, onDelete, onToday, onOpen, onTag }: {
-  n: Note; notes: Note[]; projectNames: string[]; isMobile: boolean
-  onClose: () => void; onPatch: (p: Partial<Note>) => void; onDelete: () => void; onToday: () => void; onOpen: (id: string) => void; onTag: (t: string) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [title, setTitle] = useState(n.title)
-  const [body, setBody] = useState(n.body || '')
-  const [project, setProject] = useState(n.project || '')
-  useEffect(() => { setEditing(false); setTitle(n.title); setBody(n.body || ''); setProject(n.project || '') }, [n.id]) // eslint-disable-line react-hooks/exhaustive-deps
-  const c = TYPE_COLORS[n.type] || BLUE
-  const related = n.related.map(id => notes.find(x => x.id === id)).filter(Boolean) as Note[]
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.35)', animation: 'sbFade .2s' }} />
-      <div style={{
-        position: 'fixed', top: 0, right: 0, bottom: 0, width: isMobile ? '100%' : 440, zIndex: 90, overflowY: 'auto',
-        background: 'linear-gradient(180deg, rgba(10,24,54,0.96), rgba(4,12,30,0.97))', borderLeft: `1px solid ${c}44`,
-        boxShadow: `-30px 0 80px rgba(0,0,0,0.5), inset 1px 0 0 ${c}22`, padding: '22px 22px 40px', animation: 'sbSlide .25s ease',
-        backdropFilter: 'blur(18px)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontFamily: MONO, fontSize: 10, letterSpacing: 2, color: c }}>{TYPE_ICON[n.type]} {n.type.toUpperCase()} · {ago(n.created_at)} · {n.status.toUpperCase()}</span>
-          <X onClick={onClose} />
-        </div>
-        {editing ? (
-          <>
-            <input value={title} onChange={e => setTitle(e.target.value)} style={{ ...field, fontSize: 16, fontWeight: 600, marginTop: 14 }} />
-            <textarea value={body} onChange={e => setBody(e.target.value)} rows={8} style={{ ...field, marginTop: 8, resize: 'vertical', lineHeight: 1.5 }} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <Btn color={MINT} onClick={() => { onPatch({ title: title.trim() || n.title, body }); setEditing(false) }}>SAVE</Btn>
-              <Btn onClick={() => setEditing(false)}>CANCEL</Btn>
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 22, fontWeight: 600, color: '#f4f9ff', marginTop: 14, lineHeight: 1.28 }}>{n.title}</div>
-            {n.summary && <div style={{ fontSize: 13.5, color: 'rgba(205,228,250,0.78)', marginTop: 10, lineHeight: 1.6 }}>{n.summary}</div>}
-            {n.body && n.body !== n.title && <div style={{ fontSize: 13, color: 'rgba(200,225,250,0.6)', marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'rgba(0,0,0,0.25)', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{n.body}</div>}
-            {n.url && <a href={n.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: 12, fontFamily: MONO, fontSize: 11, color: TYPE_COLORS.link, wordBreak: 'break-all', textDecoration: 'none' }}>↗ {n.url}</a>}
-          </>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '10px 10px', alignItems: 'center', marginTop: 20 }}>
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: DIM }}>PROJECT</span>
-          <input list="sb-projects-d" value={project} onChange={e => setProject(e.target.value)} onBlur={() => project !== (n.project || '') && onPatch({ project: project.trim() || null })} placeholder="none" style={{ ...field, padding: '7px 10px' }} />
-          <datalist id="sb-projects-d">{projectNames.map(p => <option key={p} value={p} />)}</datalist>
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: DIM }}>DUE</span>
-          <input type="date" value={n.due || ''} onChange={e => onPatch({ due: e.target.value || null })} style={{ ...field, padding: '7px 10px', colorScheme: 'dark' }} />
-          {n.next_action && <>
-            <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: GOLD }}>NEXT</span>
-            <span style={{ fontSize: 13, color: '#fff3d0' }}>{n.next_action}</span>
-          </>}
-        </div>
-
-        {n.tags.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 16 }}>{n.tags.map(t => <Chip key={t} onClick={() => onTag(t)} color="#bfe0ff">#{t}</Chip>)}</div>}
-
-        {related.length > 0 && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: DIM, marginBottom: 6 }}>CONNECTED</div>
-            {related.map(r => (
-              <Row key={r.id} onClick={() => onOpen(r.id)}>
-                <span style={{ color: TYPE_COLORS[r.type], width: 14, fontSize: 11 }}>{TYPE_ICON[r.type]}</span>
-                <span style={{ flex: 1, fontSize: 12.5, color: '#cfe4fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</span>
-              </Row>
-            ))}
-          </div>
-        )}
-
-        {!editing && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 22, flexWrap: 'wrap' }}>
-            <Btn color={GOLD} onClick={onToday}>→ TODAY</Btn>
-            {n.status !== 'done' ? <Btn color={MINT} onClick={() => onPatch({ status: 'done' })}>✓ DONE</Btn> : <Btn onClick={() => onPatch({ status: 'active' })}>REOPEN</Btn>}
-            {n.status === 'inbox' && <Btn onClick={() => onPatch({ status: 'active' })}>FILE</Btn>}
-            <Btn color={n.pinned ? GOLD : undefined} onClick={() => onPatch({ pinned: !n.pinned })}>{n.pinned ? '★ PINNED' : '☆ PIN'}</Btn>
-            <Btn onClick={() => setEditing(true)}>EDIT</Btn>
-            {n.status !== 'archived' ? <Btn onClick={() => { onPatch({ status: 'archived' }); onClose() }}>ARCHIVE</Btn> : <Btn onClick={() => onPatch({ status: 'active' })}>RESTORE</Btn>}
-            <Btn color={RED} onClick={onDelete}>DELETE</Btn>
-          </div>
-        )}
-      </div>
-    </>
-  )
-}
-
 function NoteCard({ n, selected, onClick }: { n: Note; selected: boolean; onClick: () => void }) {
   const c = TYPE_COLORS[n.type] || BLUE
   return (
@@ -872,8 +788,13 @@ function NoteCard({ n, selected, onClick }: { n: Note; selected: boolean; onClic
         <span style={{ color: DIM }}>{ago(n.created_at)}</span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#eef6ff', marginTop: 7, lineHeight: 1.35, textDecoration: n.status === 'done' ? 'line-through' : 'none' }}>{n.title}</div>
-      {n.summary && <div style={{ fontSize: 12, color: 'rgba(200,225,250,0.6)', marginTop: 5, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{n.summary}</div>}
+      {(() => {
+        const snippet = (n.body || '').split('\n').map(l => l.trim()).find(l => l && !l.startsWith('#') && !/^- \[( |x|X)\] ?$/.test(l) && l !== n.title)
+        const text = snippet ? snippet.replace(/^[-*>] (\[( |x|X)\] )?/, '') : n.summary
+        return text ? <div style={{ fontSize: 12, color: 'rgba(200,225,250,0.6)', marginTop: 5, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{text}</div> : null
+      })()}
       <div style={{ display: 'flex', gap: 8, marginTop: 8, fontFamily: MONO, fontSize: 9.5, flexWrap: 'wrap' }}>
+        {(() => { const pr = checklistProgress(n.body); return pr.total ? <span style={{ color: pr.done === pr.total ? MINT : GOLD }}>☑ {pr.done}/{pr.total}</span> : null })()}
         {n.project && <span style={{ color: projectColor(n.project) }}>▣ {n.project}</span>}
         {n.tags.length > 0 && <span style={{ color: 'rgba(190,225,255,0.5)' }}>{n.tags.map(t => '#' + t).join(' ')}</span>}
       </div>
