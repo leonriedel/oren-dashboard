@@ -42,6 +42,10 @@ const ago = (iso: string) => {
 }
 const hash = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
 const projectColor = (p: string) => PROJECT_HUES[hash(p) % PROJECT_HUES.length]
+const HUD: React.CSSProperties = {
+  background: 'linear-gradient(180deg, rgba(8,20,46,0.66), rgba(6,14,34,0.52))', padding: 15, borderRadius: 14,
+  backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', boxShadow: '0 8px 30px rgba(0,0,0,0.35)', flexShrink: 0,
+}
 const DEFAULT_NN = [
   { emoji: '💪', label: 'SPORT' }, { emoji: '🧘', label: 'MEDITATION' }, { emoji: '📧', label: 'MAILS' },
   { emoji: '🤖', label: 'AI DEV' }, { emoji: '⚡', label: 'OREN' },
@@ -57,6 +61,12 @@ export default function SecondBrain({ user, onBack }: Props) {
   const today = dayKey(new Date())
 
   const [tab, setTab] = useState<Tab>('flow')
+  const [heroH, setHeroH] = useState(760)
+  useEffect(() => {
+    const fit = () => setHeroH(Math.max(620, window.innerHeight - 230))
+    fit(); window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [])
   const [notes, setNotes] = useState<Note[]>([])
   const [loaded, setLoaded] = useState(false)
   const [mode, setMode] = useState<'capture' | 'ask'>('capture')
@@ -243,7 +253,7 @@ export default function SecondBrain({ user, onBack }: Props) {
   const loops = useMemo(() => live
     .filter(n => n.status !== 'done' && n.status !== 'inbox' && (n.due || n.type === 'task'))
     .sort((a, b) => (a.due || '9999-99-99').localeCompare(b.due || '9999-99-99'))
-    .slice(0, 10), [live])
+    .slice(0, 6), [live])
   const rediscover = useMemo(() => {
     const cutoff = addDays(new Date(), -4).toISOString()
     const pool = live.filter(n => (n.status === 'active' || n.status === 'reference') && n.created_at < cutoff && !['task'].includes(n.type) && !dismissed.has(n.id) && !(n.seen_at && n.seen_at.slice(0, 10) === today))
@@ -345,17 +355,37 @@ export default function SecondBrain({ user, onBack }: Props) {
         </div>}
       </div>
 
-      {/* ═══ FLOW ═══ */}
+      {/* ═══ FLOW · BRAIN HERO ═══ */}
       {tab === 'flow' && (
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1.25fr 360px', gap: 16, alignItems: 'start' }}>
+        <div style={{ position: 'relative', height: isMobile ? 'auto' : heroH, borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.1)', background: 'radial-gradient(ellipse at center, rgba(16,44,96,0.32), rgba(2,8,20,0.15) 70%)', boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4)' }}>
+          <div style={{ position: isMobile ? 'relative' : 'absolute', inset: 0 }}>
+            <KnowledgeGraph
+              notes={graphNotes} selectedId={selectedId} highlight={highlight} burstId={burstId}
+              height={isMobile ? 380 : heroH}
+              onSelect={id => setSelectedId(id)}
+              onTag={t => { setTagFilter(t); setTab('map') }}
+            />
+          </div>
+          {!isMobile && (
+            <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 14, alignItems: 'center', zIndex: 4, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: DIM, whiteSpace: 'nowrap' }}>
+              <span><b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS</span>
+              <span><b style={{ color: '#cfe8ff' }}>{tagCounts.length}</b> TOPICS</span>
+              <button onClick={() => setTab('map')} style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '6px 12px', borderRadius: 9, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(6,16,38,0.6)', border: '1px solid rgba(120,200,255,0.25)' }}>FULLSCREEN ↗</button>
+            </div>
+          )}
+          {loaded && live.length === 0 && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '58%', textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM, zIndex: 3 }}>
+              EVERY THOUGHT BECOMES A NEURON · CAPTURE ABOVE
+            </div>
+          )}
 
-          {/* INBOX + LOOPS */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-            <Panel style={{ borderColor: inbox.length ? 'rgba(251,191,36,0.28)' : undefined }}>
+          {/* left HUD */}
+          <div className="sb-hud" style={{ position: isMobile ? 'static' : 'absolute', top: 16, left: 16, bottom: 16, width: isMobile ? 'auto' : 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, zIndex: 5, padding: isMobile ? '14px 0 0' : 0 }}>
+            <Panel style={{ ...HUD, borderColor: inbox.length ? 'rgba(251,191,36,0.28)' : undefined }}>
               <Head color={inbox.length ? GOLD : MINT} right={`${inbox.length}`}>INBOX</Head>
               {inbox.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '18px 0 10px' }}>
-                  <div style={{ fontSize: 28, filter: 'drop-shadow(0 0 12px rgba(52,211,153,0.6))' }}>✓</div>
+                <div style={{ textAlign: 'center', padding: '4px 0 2px' }}>
+                  <div style={{ fontSize: 20, filter: 'drop-shadow(0 0 12px rgba(52,211,153,0.6))' }}>✓</div>
                   <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: 2, color: MINT, marginTop: 6 }}>INBOX ZERO</div>
                   <div style={{ fontSize: 12, color: DIM, marginTop: 4 }}>Mind like water. Capture the next thought above.</div>
                 </div>
@@ -379,7 +409,7 @@ export default function SecondBrain({ user, onBack }: Props) {
               )}
             </Panel>
 
-            <Panel>
+            {loops.length > 0 && <Panel style={HUD}>
               <Head color={RED} right={`${loops.length}`}>OPEN LOOPS</Head>
               {loops.length === 0 && <Empty>No open commitments. Captures with a date or a task land here.</Empty>}
               {loops.map(n => {
@@ -395,12 +425,8 @@ export default function SecondBrain({ user, onBack }: Props) {
                   </div>
                 )
               })}
-            </Panel>
-          </div>
-
-          {/* PROJECTS + REDISCOVER */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-            <Panel>
+            </Panel>}
+            {(projects.length > 0 || openProject) && <Panel style={HUD}>
               {openProject ? (() => {
                 const p = projects.find(x => x.name === openProject)
                 const list = (p?.list || []).slice().sort((a, b) => Number(a.status === 'done') - Number(b.status === 'done') || (a.due || '9999').localeCompare(b.due || '9999'))
@@ -429,7 +455,7 @@ export default function SecondBrain({ user, onBack }: Props) {
                 <>
                   <Head color={BLUE} right={`${projects.length}`}>PROJECTS</Head>
                   {projects.length === 0 && <Empty>OREN groups your captures into projects automatically — just start capturing.</Empty>}
-                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
                     {projects.slice(0, 8).map(p => {
                       const c = projectColor(p.name)
                       const total = p.open + p.done
@@ -457,12 +483,12 @@ export default function SecondBrain({ user, onBack }: Props) {
                   </div>
                 </>
               )}
-            </Panel>
+            </Panel>}
 
-            <Panel>
+            {rediscover.length > 0 && <Panel style={HUD}>
               <Head color="#b47cff" right="DAILY">REDISCOVER</Head>
               {rediscover.length === 0 && <Empty>Older ideas resurface here every day — so nothing you captured gets forgotten.</Empty>}
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.max(rediscover.length, 1)}, 1fr)`, gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
                 {rediscover.map(n => {
                   const c = TYPE_COLORS[n.type] || BLUE
                   const hide = () => setDismissed(prev => new Set(prev).add(n.id))
@@ -479,11 +505,12 @@ export default function SecondBrain({ user, onBack }: Props) {
                   )
                 })}
               </div>
-            </Panel>
+            </Panel>}
           </div>
 
-          {/* TODAY */}
-          <Panel>
+          {/* right HUD */}
+          <div className="sb-hud" style={{ position: isMobile ? 'static' : 'absolute', top: 16, right: 16, width: isMobile ? 'auto' : 340, maxHeight: isMobile ? undefined : heroH - 32, overflowY: 'auto', zIndex: 5, marginTop: isMobile ? 12 : 0 }}>
+          <Panel style={HUD}>
             <Head color={BLUE} right={new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}>TODAY</Head>
             {isAdmin && (
               <div style={{ padding: '10px 12px', borderRadius: 10, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.16)', marginBottom: 14 }}>
@@ -532,30 +559,8 @@ export default function SecondBrain({ user, onBack }: Props) {
               })}
             </div>
           </Panel>
-        </div>
-      )}
-
-      {/* ═══ NEURAL MAP on FLOW ═══ */}
-      {tab === 'flow' && (
-        <Panel style={{ padding: 0, marginTop: 16 }}>
-          <KnowledgeGraph
-            notes={graphNotes} selectedId={selectedId} highlight={highlight} burstId={burstId}
-            height={isMobile ? 380 : 540}
-            onSelect={id => setSelectedId(id)}
-            onTag={t => { setTagFilter(t); setTab('map') }}
-          />
-          <div style={{ position: 'absolute', top: 16, left: 18, right: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
-            <Head color={BLUE}>NEURAL MAP</Head>
-            <button onClick={() => setTab('map')} style={{ pointerEvents: 'auto', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '6px 12px', borderRadius: 9, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(6,16,38,0.6)', border: '1px solid rgba(120,200,255,0.25)' }}>
-              FULLSCREEN · FILTERS ↗
-            </button>
           </div>
-          {loaded && live.length === 0 && (
-            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 40, textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
-              EVERY NOTE BECOMES A NEURON · CAPTURE A FEW THOUGHTS
-            </div>
-          )}
-        </Panel>
+        </div>
       )}
 
       {/* ═══ MAP ═══ */}
@@ -648,6 +653,8 @@ export default function SecondBrain({ user, onBack }: Props) {
         .sb-row:hover .sb-x { opacity: 1 }
         .sb-card:hover { transform: translateY(-2px) }
         .sb-hover:hover { background: rgba(80,180,255,0.06) }
+        .sb-hud { scrollbar-width: none }
+        .sb-hud::-webkit-scrollbar { display: none }
         @media (hover: none) { .sb-row .sb-x { opacity: .6 } }
       `}</style>
     </ModuleLayout>
