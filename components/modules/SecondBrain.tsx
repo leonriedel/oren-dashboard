@@ -534,6 +534,29 @@ export default function SecondBrain({ user, onBack }: Props) {
         </div>
       )}
 
+      {/* ═══ NEURAL MAP on FLOW ═══ */}
+      {tab === 'flow' && (
+        <Panel style={{ padding: 0, marginTop: 16 }}>
+          <KnowledgeGraph
+            notes={graphNotes} selectedId={selectedId} highlight={highlight} burstId={burstId}
+            height={isMobile ? 380 : 540}
+            onSelect={id => setSelectedId(id)}
+            onTag={t => { setTagFilter(t); setTab('map') }}
+          />
+          <div style={{ position: 'absolute', top: 16, left: 18, right: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', pointerEvents: 'none' }}>
+            <Head color={BLUE}>NEURAL MAP</Head>
+            <button onClick={() => setTab('map')} style={{ pointerEvents: 'auto', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '6px 12px', borderRadius: 9, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(6,16,38,0.6)', border: '1px solid rgba(120,200,255,0.25)' }}>
+              FULLSCREEN · FILTERS ↗
+            </button>
+          </div>
+          {loaded && live.length === 0 && (
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 40, textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
+              EVERY NOTE BECOMES A NEURON · CAPTURE A FEW THOUGHTS
+            </div>
+          )}
+        </Panel>
+      )}
+
       {/* ═══ MAP ═══ */}
       {tab === 'map' && (
         <Panel style={{ padding: 0 }}>
