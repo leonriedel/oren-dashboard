@@ -155,6 +155,7 @@ export default function KnowledgeGraph(props: Props) {
     catch { setFailed(true); return }
     const pr = Math.min(window.devicePixelRatio || 1, 1.5)
     renderer.setPixelRatio(pr); renderer.setClearColor(0x000000, 0)
+    renderer.domElement.style.display = 'block'
     mount.appendChild(renderer.domElement)
 
     const disposables: { dispose: () => void }[] = []
