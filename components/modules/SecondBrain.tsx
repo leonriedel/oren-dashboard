@@ -12,6 +12,7 @@ import ProcessInbox from '@/components/secondbrain/ProcessInbox'
 import TopicsBoard, { type TopicView } from '@/components/secondbrain/TopicsBoard'
 
 const KnowledgeGraph = dynamic(() => import('@/components/secondbrain/KnowledgeGraph'), { ssr: false })
+const OrenCoreGL = dynamic(() => import('@/components/OrenCoreGL'), { ssr: false })
 
 /**
  * SECONDBRAIN v5 · MIND
@@ -96,9 +97,11 @@ export default function SecondBrain({ user, onBack }: Props) {
   const [briefing, setBriefing] = useState<Briefing | null>(null)
   const [topicRows, setTopicRows] = useState<TopicRow[]>([])
   const [planning, setPlanning] = useState(false)
+  const [brainOpen, setBrainOpen] = useState(false)
+  const [winH, setWinH] = useState(900)
 
   useEffect(() => {
-    const fit = () => setHeroH(Math.max(560, window.innerHeight - 250))
+    const fit = () => { setHeroH(Math.max(520, window.innerHeight - 400)); setWinH(window.innerHeight) }
     fit(); window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
   }, [])
@@ -110,6 +113,7 @@ export default function SecondBrain({ user, onBack }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); inputRef.current?.focus() }
+      if (e.key === 'Escape') setBrainOpen(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -470,28 +474,43 @@ export default function SecondBrain({ user, onBack }: Props) {
         </div>
       </div>
 
-      {/* ═══ NEURAL MAP (bottom) ═══ */}
-      <div style={{ marginTop: 14 }}>
-        {/* brain */}
-        <div style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.1)', background: 'radial-gradient(ellipse at center, rgba(16,44,96,0.32), rgba(2,8,20,0.12) 70%)', boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4)', height: isMobile ? 340 : 460 }}>
+      {/* ═══ BRAIN ORB (bottom) ═══ */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 10, paddingBottom: 10 }}>
+        <button onClick={() => setBrainOpen(true)} aria-label="open your brain" className="sb-orb" style={{
+          position: 'relative', width: 190, height: 190, borderRadius: '50%', cursor: 'pointer', padding: 0, border: 'none', background: 'transparent',
+        }}>
+          <div style={{ position: 'absolute', inset: -55, pointerEvents: 'none' }}>
+            <OrenCoreGL orbState={glow || busy ? 'thinking' : 'idle'} size={300} />
+          </div>
+          <span className="sb-orb-ring" style={{ position: 'absolute', inset: 18, borderRadius: '50%', border: '1px solid rgba(120,200,255,0.25)', pointerEvents: 'none' }} />
+        </button>
+        <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 3, color: DIM, marginTop: 46, textAlign: 'center', position: 'relative', zIndex: 2 }}>
+          <span style={{ color: glow ? MINT : BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(120,180,230,0.35)', marginTop: 4 }}>{glow ? `✦ ${glow.size} NEURONS ACTIVE` : 'TAP TO ENTER'}</div>
+      </div>
+
+      {/* ═══ BRAIN FULLSCREEN ═══ */}
+      {brainOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 88, background: 'radial-gradient(ellipse at 50% 60%, #0a1a3c 0%, #030915 60%, #000 100%)', animation: 'sbBrainIn .75s cubic-bezier(.2,.8,.2,1) both' }}>
           <KnowledgeGraph
             notes={graphNotes} selectedId={selectedId} highlight={glow} burstId={burstId}
-            height={isMobile ? 340 : 460}
+            height={winH}
             onSelect={id => setSelectedId(id)}
-            onTag={() => setLibrary(true)}
+            onTag={() => { setBrainOpen(false); setLibrary(true) }}
           />
-          <div style={{ position: 'absolute', top: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2.5, color: DIM, pointerEvents: 'none' }}>
-            <span style={{ color: BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS
+          <div style={{ position: 'absolute', top: 24, left: 28, pointerEvents: 'none', animation: 'sbRise .6s .3s both' }}>
+            <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: 4, color: '#dff0ff', fontWeight: 700 }}>YOUR BRAIN</div>
+            <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: DIM, marginTop: 4 }}><b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS · DRAG TO ROTATE · CLICK A NEURON</div>
           </div>
-          {glow && <div style={{ position: 'absolute', bottom: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: MINT, pointerEvents: 'none', animation: 'sbFade .3s' }}>✦ {glow.size} NEURON{glow.size === 1 ? '' : 'S'} ACTIVE</div>}
+          <button onClick={() => setBrainOpen(false)} style={{ position: 'absolute', top: 22, right: 26, ...topBtn, animation: 'sbRise .6s .3s both' }}>✕ CLOSE</button>
           {loaded && live.length === 0 && (
             <div style={{ position: 'absolute', left: 0, right: 0, top: '62%', textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
               TALK TO OREN → EVERY THOUGHT BECOMES A NEURON
             </div>
           )}
         </div>
-
-      </div>
+      )}
 
       {/* ═══ LIBRARY ═══ */}
       {library && <Library notes={notes} isMobile={isMobile} onClose={() => setLibrary(false)} onOpen={id => setSelectedId(id)} />}
@@ -525,6 +544,10 @@ export default function SecondBrain({ user, onBack }: Props) {
         @keyframes sbRise { from { transform: translateY(10px); opacity: 0 } to { transform: none; opacity: 1 } }
         @keyframes sbCardIn { from { transform: translateY(18px) scale(.97); opacity: 0 } to { transform: none; opacity: 1 } }
         @keyframes sbSlide { from { transform: translateX(30px); opacity: 0 } to { transform: none; opacity: 1 } }
+        @keyframes sbBrainIn { from { clip-path: circle(0% at 50% 92%); opacity: .4 } to { clip-path: circle(150% at 50% 92%); opacity: 1 } }
+        .sb-orb { transition: transform .35s cubic-bezier(.2,.8,.2,1) }
+        .sb-orb:hover { transform: scale(1.06) }
+        .sb-orb:hover .sb-orb-ring { border-color: rgba(120,200,255,0.55) !important; box-shadow: 0 0 40px rgba(80,170,255,0.25) }
         @keyframes sbDot { 0%,80%,100% { transform: scale(.5); opacity: .3 } 40% { transform: scale(1); opacity: 1 } }
         @keyframes sbOrb { 0%,100% { box-shadow: 0 0 12px rgba(52,211,153,.5), inset 0 0 8px rgba(255,255,255,.4) } 50% { box-shadow: 0 0 26px rgba(52,211,153,.9), inset 0 0 12px rgba(255,255,255,.7) } }
         .sb-scroll { scrollbar-width: thin; scrollbar-color: rgba(80,180,255,.2) transparent }
