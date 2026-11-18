@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const BOT_TOKEN = '8751181916:AAEdnCMTjrADiP4Xosp0h1a0CaA-ppdMMq0'
-const CHAT_ID = '7891571339'
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || ''
+const CHAT_ID = process.env.TELEGRAM_CHAT_ID || ''
 
 export async function POST(req: NextRequest) {
   const { messages } = await req.json()
   const lastMessage = messages[messages.length - 1]?.content
   if (!lastMessage) return NextResponse.json({ content: 'No message.' })
+  if (!BOT_TOKEN || !CHAT_ID) return NextResponse.json({ content: 'OREN-Verbindung fehlt: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID in Vercel setzen.' })
 
   // Send to OREN via Telegram
   await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {

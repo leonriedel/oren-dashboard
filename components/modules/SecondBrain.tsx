@@ -9,6 +9,7 @@ import { useRole } from '@/lib/useRole'
 import { TYPE_COLORS } from '@/components/secondbrain/KnowledgeGraph'
 import NotePage, { checklistProgress, type PageNote } from '@/components/secondbrain/NotePage'
 import ProcessInbox from '@/components/secondbrain/ProcessInbox'
+import TopicsBoard, { type TopicView } from '@/components/secondbrain/TopicsBoard'
 
 const KnowledgeGraph = dynamic(() => import('@/components/secondbrain/KnowledgeGraph'), { ssr: false })
 
@@ -24,12 +25,14 @@ type Status = 'inbox' | 'active' | 'reference' | 'done' | 'archived'
 type Note = {
   id: string; type: string; title: string; body: string | null; url: string | null; summary: string | null
   tags: string[]; related: string[]; pinned: boolean; created_at: string
-  status: Status; project: string | null; due: string | null; next_action: string | null; suggestion: string | null; seen_at: string | null
+  status: Status; project: string | null; due: string | null; next_action: string | null; suggestion: string | null; seen_at: string | null; board_day?: string | null
 }
 type Msg = { id: string; role: 'me' | 'oren'; content: string; intent?: string | null; note_id?: string | null; cited?: string[] | null; created_at: string; pending?: boolean }
 type Prio = { id: string; text: string; done: boolean; sort_order: number | null; created_at: string }
 type Habit = { id: string; emoji: string; label: string; sort_order: number }
-type DayRow = { day: string; nn_done: string[] | null }
+type Plan = { reply: string; focus: string[]; tasks: { topic: string; text: string }[]; at?: string }
+type DayRow = { day: string; nn_done: string[] | null; focus_topics?: string[] | null; plan?: Plan | null }
+type TopicRow = { id: string; name: string; priority: number; status: string }
 type Briefing = { focus?: string; briefing?: string }
 
 const MONO = 'Space Mono, monospace'
@@ -38,7 +41,7 @@ const DIM = 'rgba(120,180,230,0.5)'
 const TYPES = ['idea', 'note', 'link', 'task', 'goal', 'person', 'quote']
 const TYPE_ICON: Record<string, string> = { idea: '✦', note: '▤', link: '↗', task: '◉', goal: '◎', person: '☺', quote: '❝' }
 const INTENT: Record<string, { label: string; color: string }> = {
-  capture: { label: 'FILED', color: GOLD }, ask: { label: 'FROM YOUR BRAIN', color: MINT }, reflect: { label: 'THINKING WITH YOU', color: '#b47cff' },
+  plan: { label: 'DAY PLAN', color: GOLD }, capture: { label: 'FILED', color: GOLD }, ask: { label: 'FROM YOUR BRAIN', color: MINT }, reflect: { label: 'THINKING WITH YOU', color: '#b47cff' },
 }
 const DEFAULT_NN = [
   { emoji: '💪', label: 'SPORT' }, { emoji: '🧘', label: 'MEDITATION' }, { emoji: '📧', label: 'MAILS' },
@@ -51,6 +54,9 @@ const PROMPTS = [
   'Ich hänge bei … fest',
 ]
 
+const HUES = ['#64c8ff', '#ffd73c', '#34d399', '#b47cff', '#ff9f43', '#ff6fae', '#7ef0e0', '#a3e635']
+const hash = (x: string) => { let h = 2166136261; for (let i = 0; i < x.length; i++) { h ^= x.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
+const topicColor = (n: string) => HUES[hash(n.toLowerCase()) % HUES.length]
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -88,9 +94,11 @@ export default function SecondBrain({ user, onBack }: Props) {
   const [habits, setHabits] = useState<Habit[]>([])
   const [days, setDays] = useState<Record<string, DayRow>>({})
   const [briefing, setBriefing] = useState<Briefing | null>(null)
+  const [topicRows, setTopicRows] = useState<TopicRow[]>([])
+  const [planning, setPlanning] = useState(false)
 
   useEffect(() => {
-    const fit = () => setHeroH(Math.max(600, window.innerHeight - 250))
+    const fit = () => setHeroH(Math.max(560, window.innerHeight - 250))
     fit(); window.addEventListener('resize', fit)
     return () => window.removeEventListener('resize', fit)
   }, [])
@@ -115,13 +123,15 @@ export default function SecondBrain({ user, onBack }: Props) {
   async function loadAll() {
     const since = dayKey(addDays(new Date(), -60))
     const t = await token()
-    const [n, p, h, d, m] = await Promise.all([
+    const [n, p, h, d, m, tp] = await Promise.all([
       supabase.from('brain_notes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(800),
       supabase.from('priorities').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }).order('created_at'),
       supabase.from('non_negotiables').select('*').eq('user_id', user.id).order('sort_order'),
-      supabase.from('brain_days').select('day,nn_done').eq('user_id', user.id).gte('day', since),
+      supabase.from('brain_days').select('*').eq('user_id', user.id).gte('day', since),
       fetch('/api/brain/mind', { headers: t ? { Authorization: `Bearer ${t}` } : {} }).then(r => r.json()).catch(() => ({ messages: [] })),
+      supabase.from('brain_topics').select('*').eq('user_id', user.id),
     ])
+    setTopicRows((tp.data as TopicRow[]) || [])
     setNotes(((n.data as Note[]) || []).map(x => ({ ...x, tags: x.tags || [], related: x.related || [], status: (x.status || 'active') as Status })))
     setPrios((p.data as Prio[]) || [])
     if (!h.data?.length) {
@@ -221,11 +231,104 @@ export default function SecondBrain({ user, onBack }: Props) {
     await supabase.from('priorities').update({ done: !p.done }).eq('id', p.id)
   }
 
+  // ─── topics ───
+  async function upsertTopic(name: string, patch: Partial<TopicRow>) {
+    const ex = topicRows.find(t => t.name === name)
+    const row = { name, priority: ex?.priority ?? 2, status: ex?.status ?? 'active', ...patch }
+    setTopicRows(prev => ex ? prev.map(t => t.name === name ? { ...t, ...row } : t) : [...prev, { id: 'tmp-' + name, ...row } as TopicRow])
+    await supabase.from('brain_topics').upsert({ user_id: user.id, ...row }, { onConflict: 'user_id,name' })
+  }
+  const cyclePrio = (name: string) => { const cur = topicRows.find(t => t.name === name)?.priority ?? 2; upsertTopic(name, { priority: cur === 1 ? 3 : cur === 2 ? 1 : 2 }) }
+  const togglePause = (name: string) => { const cur = topicRows.find(t => t.name === name)?.status ?? 'active'; upsertTopic(name, { status: cur === 'paused' ? 'active' : 'paused' }) }
+  const focusList: string[] = days[today]?.focus_topics || []
+  async function setFocus(next: string[]) {
+    setDays(prev => ({ ...prev, [today]: { ...(prev[today] || { day: today, nn_done: [] }), focus_topics: next } }))
+    await supabase.from('brain_days').upsert({ user_id: user.id, day: today, focus_topics: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
+  }
+  const toggleFocus = (name: string) => setFocus(focusList.includes(name) ? focusList.filter(x => x !== name) : [...focusList, name])
+
+  function boardTemplate(topic: string, plan: Plan | null | undefined) {
+    const planned = (plan?.tasks || []).filter(t => t.topic === topic).map(t => t.text)
+    const open = notes.filter(n => n.project === topic && (n.type === 'task' || n.type === 'goal') && n.status !== 'done' && n.status !== 'archived').map(n => n.next_action || n.title)
+    const tasks = Array.from(new Set([...planned, ...open])).slice(0, 7)
+    return `## Focus\n${planned.length ? 'Plan von OREN für heute.' : ''}\n\n## Today\n${(tasks.length ? tasks : ['']).map(t => `- [ ] ${t}`).join('\n')}\n\n## Notes\n\n## Outcome\n`
+  }
+  async function ensureBoard(topic: string, plan?: Plan | null): Promise<string | null> {
+    const ex = notes.find(n => n.project === topic && n.board_day === today && n.status !== 'archived')
+    if (ex) return ex.id
+    const title = `${topic} · ${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}`
+    const { data } = await supabase.from('brain_notes').insert({
+      user_id: user.id, type: 'note', title, body: boardTemplate(topic, plan ?? days[today]?.plan), project: topic, tags: ['daily'], status: 'active', board_day: today, related: [],
+    }).select().single()
+    if (!data) return null
+    const note = { ...(data as Note), tags: (data as Note).tags || [], related: (data as Note).related || [] }
+    setNotes(prev => [note, ...prev])
+    return note.id
+  }
+  async function openBoard(topic: string) { const id = await ensureBoard(topic); if (id) setSelectedId(id) }
+
+  async function planDay() {
+    if (planning) return
+    setPlanning(true); setBusy(true)
+    try {
+      const t = await token()
+      const context = {
+        topics: topicViews.filter(v => v.status !== 'paused').slice(0, 15).map(v => ({
+          name: v.name, priority: `P${v.priority}`, heat: v.heat, overdue: v.overdue, dueToday: v.dueToday, next: v.next,
+          open: v.open.slice(0, 6).map(o => ({ task: o.next_action || o.title, due: o.due })),
+        })),
+        priorities: prios.filter(p => !p.done).map(p => p.text),
+      }
+      const j = await (await fetch('/api/brain/mind', {
+        method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
+        body: JSON.stringify({ mode: 'plan', today, context }),
+      })).json()
+      if (j.error) { setMsgs(prev => [...prev, { id: 'err-' + Date.now(), role: 'oren', content: /brain_days|focus_topics|plan/.test(j.error) ? 'Für die Tagesplanung fehlen noch Spalten — bitte lib/sql/brain_v6.sql in Supabase ausführen.' : `Planung fehlgeschlagen: ${j.error}`, created_at: new Date().toISOString() }]); return }
+      setMsgs(prev => [...prev, j.me, j.oren].filter(Boolean))
+      if (j.plan) {
+        const plan = j.plan as Plan
+        setDays(prev => ({ ...prev, [today]: { ...(prev[today] || { day: today, nn_done: [] }), focus_topics: plan.focus, plan } }))
+        for (const topic of plan.focus) await ensureBoard(topic, plan)
+      }
+    } finally { setPlanning(false); setBusy(false) }
+  }
+
   // ─── derived ───
   const live = useMemo(() => notes.filter(n => n.status !== 'archived'), [notes])
+  const topicViews: TopicView[] = useMemo(() => {
+    const names = Array.from(new Set([...topicRows.map(t => t.name), ...(live.map(n => n.project).filter(Boolean) as string[])]))
+    const soon = dayKey(addDays(new Date(), 3)), cutoff = new Date(Date.now() - 48 * 3600000).toISOString()
+    const todayText = msgs.filter(m => m.role === 'me' && m.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10)).map(m => m.content.toLowerCase()).join(' ')
+    const views = names.map(name => {
+      const row = topicRows.find(t => t.name === name)
+      const items = live.filter(n => n.project === name && !n.board_day)
+      const open = items.filter(n => (n.type === 'task' || n.type === 'goal') && n.status !== 'done').sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'))
+      const overdue = open.filter(n => n.due && n.due < today).length
+      const dueToday = open.filter(n => n.due === today).length
+      const dueSoon = open.filter(n => n.due && n.due <= soon).length
+      const recent = items.filter(n => n.created_at > cutoff).length
+      const mentions = todayText ? todayText.split(name.toLowerCase()).length - 1 : 0
+      const priority = row?.priority ?? 2
+      const status = row?.status ?? 'active'
+      const focus = focusList.includes(name)
+      const heat = status === 'paused' ? 0 : (focus ? 60 : 0) + ({ 1: 35, 2: 15, 3: 0 } as Record<number, number>)[priority] + overdue * 14 + dueToday * 12 + dueSoon * 5 + Math.min(open.length, 6) * 3 + Math.min(recent, 5) * 4 + Math.min(mentions, 3) * 5
+      const boardNote = live.find(n => n.project === name && n.board_day === today)
+      const bp = boardNote ? checklistProgress(boardNote.body) : null
+      const last = items.reduce<string | null>((a, n) => (!a || n.created_at > a ? n.created_at : a), null)
+      const next = open[0] ? (open[0].next_action || open[0].title) : (items.find(n => n.next_action)?.next_action || null)
+      return {
+        name, priority, status, heat, focus, color: topicColor(name), overdue, dueToday, total: items.length, last, next,
+        open: open.map(o => ({ id: o.id, type: o.type, title: o.title, status: o.status, due: o.due, next_action: o.next_action })),
+        board: boardNote ? { id: boardNote.id, done: bp!.done, total: bp!.total } : null,
+      } as TopicView
+    })
+    return views.sort((a, b) => b.heat - a.heat || a.name.localeCompare(b.name))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicRows, live, msgs, focusList.join('|'), today])
+  const maxHeat = Math.max(1, ...topicViews.map(t => t.heat))
   const inbox = useMemo(() => notes.filter(n => n.status === 'inbox').sort((a, b) => a.created_at.localeCompare(b.created_at)), [notes])
-  const projectNames = useMemo(() => Array.from(new Set(live.map(n => n.project).filter(Boolean) as string[])), [live])
-  const graphNotes = useMemo(() => live.map(n => ({ id: n.id, type: n.type, title: n.title, tags: n.tags, related: n.related, pinned: n.pinned })), [live])
+  const projectNames = useMemo(() => Array.from(new Set([...topicRows.map(t => t.name), ...(live.map(n => n.project).filter(Boolean) as string[])])), [live, topicRows])
+  const graphNotes = useMemo(() => live.filter(n => !n.board_day).map(n => ({ id: n.id, type: n.type, title: n.title, tags: n.tags, related: n.related, pinned: n.pinned })), [live])
   const tagCount = useMemo(() => new Set(live.flatMap(n => n.tags)).size, [live])
   const openPrios = prios.filter(p => !p.done)
   const dueSoon = useMemo(() => live.filter(n => n.due && n.status !== 'done' && n.due <= dayKey(addDays(new Date(), 1))).length, [live])
@@ -285,27 +388,16 @@ export default function SecondBrain({ user, onBack }: Props) {
         )}
       </div>
 
-      {/* ═══ HERO: BRAIN + MIND STREAM ═══ */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1.45fr) minmax(380px, 1fr)', gap: 14, height: isMobile ? 'auto' : heroH }}>
+      {/* ═══ TOPICS + MIND STREAM ═══ */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14, height: isMobile ? 'auto' : heroH }}>
 
-        {/* brain */}
-        <div style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.1)', background: 'radial-gradient(ellipse at center, rgba(16,44,96,0.32), rgba(2,8,20,0.12) 70%)', boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4)', height: isMobile ? 360 : heroH }}>
-          <KnowledgeGraph
-            notes={graphNotes} selectedId={selectedId} highlight={glow} burstId={burstId}
-            height={isMobile ? 360 : heroH}
-            onSelect={id => setSelectedId(id)}
-            onTag={() => setLibrary(true)}
-          />
-          <div style={{ position: 'absolute', top: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2.5, color: DIM, pointerEvents: 'none' }}>
-            <span style={{ color: BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS
-          </div>
-          {glow && <div style={{ position: 'absolute', bottom: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: MINT, pointerEvents: 'none', animation: 'sbFade .3s' }}>✦ {glow.size} NEURON{glow.size === 1 ? '' : 'S'} ACTIVE</div>}
-          {loaded && live.length === 0 && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: '62%', textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
-              TALK TO OREN → EVERY THOUGHT BECOMES A NEURON
-            </div>
-          )}
-        </div>
+        <TopicsBoard
+          topics={topicViews} maxHeat={maxHeat} height={isMobile ? 'auto' : heroH}
+          onCyclePrio={cyclePrio} onToggleFocus={toggleFocus} onTogglePause={togglePause}
+          onOpenBoard={openBoard} onOpenNote={id => setSelectedId(id)}
+          onDoneTask={id => patchNote(id, { status: 'done' })}
+          onAddTopic={name => upsertTopic(name, {})}
+        />
 
         {/* mind stream */}
         <div style={{ display: 'flex', flexDirection: 'column', borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.12)', background: 'linear-gradient(180deg, rgba(10,24,54,0.6), rgba(4,12,30,0.55))', backdropFilter: 'blur(14px)', height: isMobile ? 560 : heroH }}>
@@ -315,7 +407,7 @@ export default function SecondBrain({ user, onBack }: Props) {
               <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: 2.5, color: '#dff0ff', fontWeight: 700 }}>OREN · MIND</div>
               <div style={{ fontSize: 11, color: DIM, marginTop: 1 }}>{busy ? 'denkt nach…' : 'files · answers · thinks with you'}</div>
             </div>
-            <span style={{ fontFamily: MONO, fontSize: 9, color: 'rgba(120,180,230,0.35)', letterSpacing: 1 }}>⌘K</span>
+            {isAdmin && <button onClick={planDay} disabled={planning} style={{ ...pill, color: GOLD, borderColor: 'rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.1)', cursor: planning ? 'wait' : 'pointer' }}>{planning ? 'PLANNING…' : '☀ PLAN MY DAY'}</button>}
           </div>
 
           <div ref={streamRef} className="sb-scroll" style={{ flex: 1, overflowY: 'auto', padding: '18px 18px 8px' }}>
@@ -338,7 +430,7 @@ export default function SecondBrain({ user, onBack }: Props) {
                   <div style={{ fontSize: 14, color: '#e8f3ff', lineHeight: 1.6 }}>
                     {greeting}, {firstName}.{isAdmin && briefing?.focus ? <> Heute zählt vor allem: <b style={{ color: '#fff' }}>{briefing.focus}</b>.</> : ''} Was geht dir durch den Kopf?
                   </div>
-                  <div style={{ fontSize: 11.5, color: DIM, marginTop: 6 }}>Schreib oder sprich einfach — Ideen, Aufgaben, Fragen, Grübeleien. Ich sortiere.</div>
+                  <div style={{ fontSize: 11.5, color: DIM, marginTop: 6 }}>Schreib oder sprich einfach — Ideen, Aufgaben, Fragen, Grübeleien. Oder drück <b style={{ color: GOLD }}>☀ PLAN MY DAY</b>, dann plane ich deinen Tag und lege für jedes Fokus-Thema ein Tagesboard an.</div>
                 </div>
               </div>
             )}
@@ -376,6 +468,29 @@ export default function SecondBrain({ user, onBack }: Props) {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ═══ NEURAL MAP (bottom) ═══ */}
+      <div style={{ marginTop: 14 }}>
+        {/* brain */}
+        <div style={{ position: 'relative', borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.1)', background: 'radial-gradient(ellipse at center, rgba(16,44,96,0.32), rgba(2,8,20,0.12) 70%)', boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4)', height: isMobile ? 340 : 460 }}>
+          <KnowledgeGraph
+            notes={graphNotes} selectedId={selectedId} highlight={glow} burstId={burstId}
+            height={isMobile ? 340 : 460}
+            onSelect={id => setSelectedId(id)}
+            onTag={() => setLibrary(true)}
+          />
+          <div style={{ position: 'absolute', top: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2.5, color: DIM, pointerEvents: 'none' }}>
+            <span style={{ color: BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS
+          </div>
+          {glow && <div style={{ position: 'absolute', bottom: 16, left: 18, fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: MINT, pointerEvents: 'none', animation: 'sbFade .3s' }}>✦ {glow.size} NEURON{glow.size === 1 ? '' : 'S'} ACTIVE</div>}
+          {loaded && live.length === 0 && (
+            <div style={{ position: 'absolute', left: 0, right: 0, top: '62%', textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
+              TALK TO OREN → EVERY THOUGHT BECOMES A NEURON
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* ═══ LIBRARY ═══ */}

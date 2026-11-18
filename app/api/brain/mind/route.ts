@@ -35,7 +35,8 @@ export async function POST(req: Request) {
   const a = await auth(req)
   if (!a) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   const { supa, user, isAdmin } = a
-  const { text, today } = await req.json().catch(() => ({}))
+  const { text, today, mode, context } = await req.json().catch(() => ({}))
+  if (mode === 'plan') return planDay(req, supa, user.id, isAdmin, today, context)
   const raw = String(text || '').trim()
   if (!raw) return NextResponse.json({ error: 'empty' }, { status: 400 })
 
@@ -113,4 +114,51 @@ Return ONLY JSON: { "intent": "capture"|"ask"|"reflect", "reply": "...", "cited"
     user_id: user.id, role: 'oren', content: out.reply, intent: out.intent, note_id: note?.id || null, cited: out.cited,
   }).select().single()
   return NextResponse.json({ me: meRow, oren: orenRow, note })
+}
+
+// ─── PLAN MY DAY ───
+async function planDay(req: Request, supa: any, userId: string, isAdmin: boolean, today: string | undefined, context: any) {
+  if (!isAdmin || !ANTHROPIC_KEY) return NextResponse.json({ error: 'planning needs admin + ANTHROPIC_API_KEY' }, { status: 200 })
+  const day = today || new Date().toISOString().slice(0, 10)
+  const { data: meRow } = await supa.from('brain_mind').insert({ user_id: userId, role: 'me', content: '☀ Plan my day', intent: 'plan' }).select().single()
+  const origin = new URL(req.url).origin
+  const cal = await fetch(`${origin}/api/calendar`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({}))
+  const events = (cal.events || []).filter((e: any) => String(e.date).slice(0, 10) === day).map((e: any) => ({ title: e.title, start: e.date }))
+  const { data: hist } = await supa.from('brain_mind').select('role,content').eq('user_id', userId).order('created_at', { ascending: false }).limit(8)
+
+  const prompt = `You are OREN, Leon's chief of staff. Plan his day ${day} (${new Date(day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long' })}).
+Pick the 1-3 topics that deserve focus today (respect P1 priority, overdue/due items, momentum, calendar load). For each focus topic give 2-4 concrete tasks doable today.
+Write the reply in German, direct, max 90 words: a short plan with the order of the day. No fluff.
+
+TOPICS (sorted by heat; P1 = high priority):
+${JSON.stringify(context?.topics || [], null, 1).slice(0, 7000)}
+
+CURRENT PRIORITIES: ${JSON.stringify(context?.priorities || [])}
+CALENDAR TODAY: ${JSON.stringify(events)}
+RECENT CONVERSATION: ${(hist || []).reverse().map((m: any) => `${m.role}: ${m.content}`).join(' | ').slice(0, 1500)}
+
+Return ONLY JSON: { "reply": "...", "focus": ["exact topic names"], "tasks": [{ "topic": "exact topic name", "text": "task" }] }`
+
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 900, messages: [{ role: 'user', content: prompt }] }),
+    })
+    const j = await r.json()
+    const m = String(j?.content?.[0]?.text || '').match(/\{[\s\S]*\}/)
+    const p = m ? JSON.parse(m[0]) : { reply: 'Konnte keinen Plan erstellen.', focus: [], tasks: [] }
+    const names = new Set(((context?.topics || []) as any[]).map(t => t.name))
+    const plan = {
+      reply: String(p.reply || ''),
+      focus: ((p.focus || []) as string[]).filter(n => names.has(n)).slice(0, 3),
+      tasks: ((p.tasks || []) as any[]).filter(t => names.has(t.topic) && t.text).map(t => ({ topic: String(t.topic), text: String(t.text).slice(0, 140) })).slice(0, 12),
+      at: new Date().toISOString(),
+    }
+    await supa.from('brain_days').upsert({ user_id: userId, day, focus_topics: plan.focus, plan, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
+    const { data: orenRow } = await supa.from('brain_mind').insert({ user_id: userId, role: 'oren', content: plan.reply, intent: 'plan' }).select().single()
+    return NextResponse.json({ me: meRow, oren: orenRow, plan })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 200 })
+  }
 }
