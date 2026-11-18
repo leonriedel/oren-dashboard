@@ -121,6 +121,18 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [])
 
+  // OREN Voice: navigation + orb state from the global voice assistant
+  useEffect(() => {
+    const valid: Screen[] = ['home', 'brain', 'edgar', 'invest', 'news', 'think', 'sport', 'estate']
+    const onNav = (e: Event) => { const t = (e as CustomEvent).detail as Screen; if (valid.includes(t)) setScreen(t) }
+    const onState = (e: Event) => setOrbState((e as CustomEvent).detail as OrbState)
+    window.addEventListener('oren:navigate', onNav)
+    window.addEventListener('oren:state', onState)
+    const sp = new URLSearchParams(window.location.search).get('screen') as Screen | null
+    if (sp && valid.includes(sp)) { setScreen(sp); window.history.replaceState(null, '', '/dashboard') }
+    return () => { window.removeEventListener('oren:navigate', onNav); window.removeEventListener('oren:state', onState) }
+  }, [])
+
   const logout = useCallback(async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
