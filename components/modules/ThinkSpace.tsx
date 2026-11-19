@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { isMikha, MBadge } from '@/components/thinkspace/mikha'
+import BoardEditor from '@/components/thinkspace/BoardEditor'
 
 type Board = {
   id: string
@@ -25,23 +27,8 @@ type Block = {
   updated_by?: string | null
 }
 
-// Mikha marker: everything written or last edited by someone other than Leon gets a pink M
-const LEON_ID = '453d97b5-1e01-48c5-9f0b-8345039b3dca'
-const isMikha = (id?: string | null) => !!id && id !== LEON_ID
-function MBadge({ edited, count }: { edited?: boolean; count?: number }) {
-  return (
-    <span title={edited ? 'von Mikha geändert' : 'von Mikha geschrieben'} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, alignSelf: 'center',
-      fontFamily: 'Space Mono, monospace', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5,
-      color: '#ff5fb7', padding: '1px 6px', borderRadius: 6, marginLeft: 6,
-      background: edited ? 'transparent' : 'rgba(255,95,183,0.14)', border: '1px solid rgba(255,95,183,0.55)',
-      boxShadow: '0 0 8px rgba(255,95,183,0.25)',
-    }}>M{edited ? '✎' : ''}{count ? ` ${count}` : ''}</span>
-  )
-}
-
 const PRESET_COLORS = ['#80c0ff', '#34d399', '#fbbf24', '#f97316', '#a78bfa', '#ff6b6b', '#38bdf8']
-const PRESET_EMOJIS = ['📋','💡','🎯','🚀','📊','✍️','🌱','🧠','📅','🛠']
+const PRESET_EMOJIS = ['📋','💡','🎯','🚀','📊','✍️','🌱','🧠','📅','🛠','🏝','🏡','🎨']
 
 export default function ThinkSpace({ onBack }: any) {
   const isMobile = useIsMobile()
@@ -103,7 +90,7 @@ export default function ThinkSpace({ onBack }: any) {
 
   // ─── DETAIL VIEW ──────────────────────────────────────────────
   if (currentBoard) {
-    return <BoardDetail board={currentBoard} onBack={() => { setCurrentBoard(null); loadBoards() }} supabase={supabase} />
+    return <BoardEditor board={currentBoard} onBack={() => { setCurrentBoard(null); loadBoards() }} supabase={supabase} />
   }
 
   // ─── BOARDS GRID ──────────────────────────────────────────────
@@ -244,168 +231,6 @@ function NewBoardForm({ onCancel, onCreate }: any) {
 // ═══════════════════════════════════════════════════════════════
 // BOARD DETAIL — blocks editor (text / heading / todo)
 // ═══════════════════════════════════════════════════════════════
-
-function BoardDetail({ board, onBack, supabase }: any) {
-  const [blocks, setBlocks] = useState<Block[]>([])
-  const [loading, setLoading] = useState(true)
-  const [titleEdit, setTitleEdit] = useState(board.title)
-
-  const load = useCallback(async () => {
-    const { data } = await supabase
-      .from('workspace_blocks')
-      .select('*')
-      .eq('board_id', board.id)
-      .order('position', { ascending: true })
-    setBlocks((data as Block[]) || [])
-    setLoading(false)
-  }, [board.id, supabase])
-
-  useEffect(() => { load() }, [load])
-
-  const addBlock = async (type: Block['type']) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    const maxPos = blocks.reduce((m, b) => Math.max(m, b.position), -1)
-    const { data } = await supabase.from('workspace_blocks').insert({
-      board_id: board.id, type, content: '', position: maxPos + 1, created_by: user?.id,
-    }).select().single()
-    if (data) setBlocks(prev => [...prev, data as Block])
-  }
-
-  const updateBlock = async (id: string, fields: Partial<Block>) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...fields, updated_by: user?.id || b.updated_by } : b))
-    const now = new Date().toISOString()
-    const { error } = await supabase.from('workspace_blocks').update({ ...fields, updated_at: now, updated_by: user?.id }).eq('id', id)
-    if (error) await supabase.from('workspace_blocks').update({ ...fields, updated_at: now }).eq('id', id)   // before updated_by column exists
-  }
-
-  const deleteBlock = async (id: string) => {
-    setBlocks(prev => prev.filter(b => b.id !== id))
-    await supabase.from('workspace_blocks').delete().eq('id', id)
-  }
-
-  const saveTitle = async () => {
-    if (titleEdit.trim() && titleEdit !== board.title) {
-      await supabase.from('workspace_boards').update({ title: titleEdit.trim(), updated_at: new Date().toISOString() }).eq('id', board.id)
-      board.title = titleEdit.trim()
-    }
-  }
-
-  return (
-    <div style={{ minHeight:'100vh', background:'#000', color:'#d0e5ff', padding:'20px 28px', fontFamily:'Inter, sans-serif' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:18, paddingBottom:14, borderBottom:'1px solid rgba(80,180,255,0.15)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          <div style={{ fontSize:32 }}>{board.emoji}</div>
-          <input
-            value={titleEdit}
-            onChange={e => setTitleEdit(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-            style={{
-              background:'transparent', border:'none', outline:'none',
-              fontFamily:'Inter, sans-serif', fontSize:26, fontWeight:600, color:'#f5f5f5',
-              letterSpacing:0.3, padding:0,
-            }}
-          />
-        </div>
-        <button onClick={onBack} style={btnGhost}>← BACK</button>
-      </div>
-
-      {loading ? (
-        <div style={{ fontSize:11, color:'rgba(128,192,255,0.4)', textAlign:'center', padding:40, fontFamily:'Space Mono, monospace' }}>Loading...</div>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:6, maxWidth:780 }}>
-          {blocks.map(b => (
-            <BlockRow key={b.id} block={b} onUpdate={(fields: Partial<Block>) => updateBlock(b.id, fields)} onDelete={() => deleteBlock(b.id)} />
-          ))}
-
-          {blocks.length === 0 && (
-            <div style={{ fontSize:13, color:'rgba(128,192,255,0.4)', padding:'20px 0', fontStyle:'italic' }}>
-              Empty board. Add a block below to start writing.
-            </div>
-          )}
-
-          <div style={{ display:'flex', gap:8, marginTop:14, paddingTop:14, borderTop:'1px solid rgba(80,180,255,0.1)' }}>
-            <button onClick={() => addBlock('heading')} style={btnGhost}>+ HEADING</button>
-            <button onClick={() => addBlock('text')} style={btnGhost}>+ TEXT</button>
-            <button onClick={() => addBlock('todo')} style={btnGhost}>+ TODO</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function BlockRow({ block, onUpdate, onDelete }: any) {
-  const [local, setLocal] = useState(block.content)
-  const [hovered, setHovered] = useState(false)
-
-  const save = () => { if (local !== block.content) onUpdate({ content: local }) }
-
-  const base: any = {
-    background:'transparent', border:'none', outline:'none',
-    width:'100%', color:'#e5f2ff', fontFamily:'Inter, sans-serif',
-    padding:'6px 0', resize:'none',
-  }
-
-  const content = block.type === 'heading' ? (
-    <input
-      value={local}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={save}
-      placeholder="Heading..."
-      style={{ ...base, fontSize:20, fontWeight:600, letterSpacing:0.2 }}
-    />
-  ) : block.type === 'todo' ? (
-    <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
-      <input
-        type="checkbox" checked={block.done}
-        onChange={e => onUpdate({ done: e.target.checked })}
-        style={{ width:16, height:16, accentColor:'#80c0ff', cursor:'pointer' }}
-      />
-      <input
-        value={local}
-        onChange={e => setLocal(e.target.value)}
-        onBlur={save}
-        placeholder="To-do item..."
-        style={{
-          ...base, fontSize:14,
-          textDecoration: block.done ? 'line-through' : 'none',
-          opacity: block.done ? 0.5 : 1,
-        }}
-      />
-    </div>
-  ) : (
-    <textarea
-      value={local}
-      onChange={e => setLocal(e.target.value)}
-      onBlur={save}
-      placeholder="Text..."
-      rows={Math.max(1, local.split('\n').length)}
-      style={{ ...base, fontSize:14, lineHeight:1.6 }}
-    />
-  )
-
-  return (
-    <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ display:'flex', alignItems:'flex-start', gap:8, position:'relative', borderRadius:4, padding:'2px 4px' }}
-    >
-      <div style={{ flex:1 }}>{content}</div>
-      {isMikha(block.created_by) ? <MBadge /> : isMikha(block.updated_by) ? <MBadge edited /> : null}
-      {hovered && (
-        <button
-          onClick={onDelete}
-          style={{
-            background:'transparent', border:'none', color:'rgba(255,107,107,0.55)',
-            cursor:'pointer', fontSize:12, padding:'6px 4px', flexShrink:0,
-          }}
-        >✕</button>
-      )}
-    </div>
-  )
-}
 
 // ─── shared styles ──────────────────────────────────────────────
 
