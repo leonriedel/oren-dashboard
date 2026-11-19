@@ -40,7 +40,7 @@ const BLOCK_MENU: { type: BType | 'template'; icon: string; label: string; hint:
   { type: 'todo', icon: '☐', label: 'To-do', hint: 'checkbox' },
   { type: 'bullet', icon: '•', label: 'Bullet', hint: 'list item' },
   { type: 'link', icon: '↗', label: 'Link', hint: 'preview card (Maps, listing, Drive …)' },
-  { type: 'image', icon: '🖼', label: 'Images', hint: 'upload photos, gallery' },
+  { type: 'image', icon: '🖼', label: 'Images & PDFs', hint: 'photos and PDFs in one gallery' },
   { type: 'file', icon: '📄', label: 'PDF / File', hint: 'upload PDFs & documents, preview inline' },
   { type: 'props', icon: '☷', label: 'Details', hint: 'table: price, size, location …' },
   { type: 'callout', icon: '💡', label: 'Callout', hint: 'highlighted info box' },
@@ -177,13 +177,13 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     ])
   }
   async function uploadImages(b: Block, files: FileList | File[]) {
-    const arr = Array.from(files).filter(f => f.type.startsWith('image/'))
+    const arr = Array.from(files).filter(f => f.type.startsWith('image/') || f.type === 'application/pdf' || /\.pdf$/i.test(f.name))
     if (!arr.length) return
     const added: string[] = []
     for (const f of arr) {
       const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60)
       const path = `${board.id}/${b.id}/${Date.now()}-${safe}`
-      const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type, upsert: false })
+      const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'application/octet-stream'), upsert: false })
       if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload failed: ' + error.message); continue }
       added.push(path)
     }
@@ -520,16 +520,22 @@ function ImageBlock({ block, urls, onUpload, onRemove, onOpen }: { block: Block;
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
         {paths.map((p, i) => (
           <div key={p} className="ts-img" style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 10, overflow: 'hidden', background: 'rgba(10,24,54,0.6)', border: '1px solid rgba(120,190,255,0.15)', cursor: 'zoom-in' }} onClick={() => onOpen(i)}>
-            {urls[p] ? <img src={urls[p]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 9, color: DIM }}>…</span>}
-            <button onClick={e => { e.stopPropagation(); if (confirm('Remove this image?')) onRemove(p) }} className="ts-img-x" style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11 }}>✕</button>
+            {/\.pdf$/i.test(p) ? (
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, padding: 10, background: 'linear-gradient(160deg, rgba(248,113,113,0.12), rgba(10,24,54,0.6))' }}>
+                <span style={{ fontSize: 30 }}>📕</span>
+                <span style={{ fontSize: 11, color: '#eef6ff', textAlign: 'center', lineHeight: 1.3, wordBreak: 'break-word', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.split('/').pop()!.replace(/^\d+-/, '').replace(/_/g, ' ')}</span>
+                <span style={{ fontFamily: MONO, fontSize: 8.5, color: '#f87171', letterSpacing: 1 }}>PDF</span>
+              </span>
+            ) : urls[p] ? <img src={urls[p]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 9, color: DIM }}>…</span>}
+            <button onClick={e => { e.stopPropagation(); if (confirm(/\.pdf$/i.test(p) ? 'Remove this PDF?' : 'Remove this image?')) onRemove(p) }} className="ts-img-x" style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11 }}>✕</button>
           </div>
         ))}
         <button onClick={() => input.current?.click()} style={{ aspectRatio: '4 / 3', borderRadius: 10, cursor: 'pointer', background: 'rgba(80,180,255,0.04)', border: '1px dashed rgba(120,190,255,0.3)', color: 'rgba(160,205,250,0.75)', fontFamily: MONO, fontSize: 10, letterSpacing: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <span style={{ fontSize: 20 }}>{busy ? '◌' : '🖼'}</span>{busy ? 'UPLOADING…' : paths.length ? '+ MORE' : 'UPLOAD IMAGES'}
+          <span style={{ fontSize: 20 }}>{busy ? '◌' : '🖼'}</span>{busy ? 'UPLOADING…' : paths.length ? '+ MORE' : 'UPLOAD IMAGES / PDF'}
           {!paths.length && !busy && <span style={{ fontSize: 8.5, color: DIM, letterSpacing: 0.5 }}>or drag & drop here</span>}
         </button>
       </div>
-      <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { if (e.target.files) up(e.target.files); e.target.value = '' }} />
+      <input ref={input} type="file" accept="image/*,.pdf,application/pdf" multiple hidden onChange={e => { if (e.target.files) up(e.target.files); e.target.value = '' }} />
       <style>{`.ts-img .ts-img-x { opacity: 0; transition: opacity .15s } .ts-img:hover .ts-img-x { opacity: 1 } @media (hover: none) { .ts-img .ts-img-x { opacity: .8 } }`}</style>
     </div>
   )
@@ -606,7 +612,9 @@ function Lightbox({ paths, urls, start, onClose }: { paths: string[]; urls: Reco
   const nav: React.CSSProperties = { position: 'absolute', top: '50%', transform: 'translateY(-50%)', width: 46, height: 46, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 18, cursor: 'pointer' }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>
-      {urls[paths[i]] && <img src={urls[paths[i]]} alt="" onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '88vh', borderRadius: 10, boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />}
+      {urls[paths[i]] && (/\.pdf$/i.test(paths[i])
+        ? <iframe src={urls[paths[i]]} title="PDF" onClick={e => e.stopPropagation()} style={{ width: 'min(1000px, 92vw)', height: '88vh', border: 'none', borderRadius: 10, background: '#fff', boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />
+        : <img src={urls[paths[i]]} alt="" onClick={e => e.stopPropagation()} style={{ maxWidth: '92vw', maxHeight: '88vh', borderRadius: 10, boxShadow: '0 20px 80px rgba(0,0,0,0.8)' }} />)}
       {paths.length > 1 && <>
         <button onClick={e => { e.stopPropagation(); setI(x => (x - 1 + paths.length) % paths.length) }} style={{ ...nav, left: 20 }}>‹</button>
         <button onClick={e => { e.stopPropagation(); setI(x => (x + 1) % paths.length) }} style={{ ...nav, right: 20 }}>›</button>
