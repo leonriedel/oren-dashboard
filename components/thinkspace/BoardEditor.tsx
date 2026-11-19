@@ -10,7 +10,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
  * Everything nests via parent_id; open/closed state is remembered per viewer.
  */
 
-type BType = 'section' | 'toggle' | 'heading' | 'text' | 'todo' | 'bullet' | 'link' | 'image' | 'props' | 'divider' | 'callout'
+type BType = 'section' | 'toggle' | 'heading' | 'text' | 'todo' | 'bullet' | 'link' | 'image' | 'file' | 'props' | 'divider' | 'callout'
 type Block = {
   id: string; board_id: string; parent_id: string | null; type: BType; content: string; done: boolean; position: number
   props: any; created_by?: string | null; updated_by?: string | null
@@ -41,6 +41,7 @@ const BLOCK_MENU: { type: BType | 'template'; icon: string; label: string; hint:
   { type: 'bullet', icon: '•', label: 'Bullet', hint: 'list item' },
   { type: 'link', icon: '↗', label: 'Link', hint: 'preview card (Maps, listing, Drive …)' },
   { type: 'image', icon: '🖼', label: 'Images', hint: 'upload photos, gallery' },
+  { type: 'file', icon: '📄', label: 'PDF / File', hint: 'upload PDFs & documents, preview inline' },
   { type: 'props', icon: '☷', label: 'Details', hint: 'table: price, size, location …' },
   { type: 'callout', icon: '💡', label: 'Callout', hint: 'highlighted info box' },
   { type: 'divider', icon: '—', label: 'Divider', hint: '' },
@@ -52,6 +53,7 @@ function defaultProps(type: BType): any {
   if (type === 'toggle') return { status: 'new' }
   if (type === 'props') return { rows: [{ k: '', v: '' }] }
   if (type === 'image') return { paths: [] }
+  if (type === 'file') return { files: [] }
   if (type === 'link') return { url: '' }
   if (type === 'callout') return { emoji: '💡' }
   return {}
@@ -88,7 +90,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
   const isOpen = (b: Block) => open[b.id] ?? (b.type === 'section')
 
   async function signImages(list: Block[]) {
-    const paths = list.flatMap(b => (b.type === 'image' ? (b.props?.paths || []) : [])).filter((p: string) => !urls[p])
+    const paths = list.flatMap(b => (b.type === 'image' ? (b.props?.paths || []) : b.type === 'file' ? (b.props?.files || []).map((f: any) => f.path) : [])).filter((p: string) => !urls[p])
     if (!paths.length) return
     const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 60 * 60 * 6)
     const map: Record<string, string> = {}
@@ -136,6 +138,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     await insert('props', t.id, { props: { rows: LAND_KEYS.map(k => ({ k, v: '' })) } })
     await insert('link', t.id)
     await insert('image', t.id)
+    await insert('file', t.id)
     await insert('text', t.id, { content: '' })
     setFocusId(t.id)
   }
@@ -157,7 +160,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const doomed = new Set<string>([b.id])
     let grew = true
     while (grew) { grew = false; for (const x of blocks) if (x.parent_id && doomed.has(x.parent_id) && !doomed.has(x.id)) { doomed.add(x.id); grew = true } }
-    const paths = blocks.filter(x => doomed.has(x.id) && x.type === 'image').flatMap(x => x.props?.paths || [])
+    const paths = blocks.filter(x => doomed.has(x.id) && (x.type === 'image' || x.type === 'file')).flatMap(x => x.type === 'image' ? (x.props?.paths || []) : (x.props?.files || []).map((f: any) => f.path))
     setBlocks(prev => prev.filter(x => !doomed.has(x.id)))
     await supabase.from('workspace_blocks').delete().eq('id', b.id)
     if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
@@ -191,6 +194,29 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const map: Record<string, string> = {}
     for (const d of data || []) if (d.signedUrl && d.path) map[d.path] = d.signedUrl
     setUrls(prev => ({ ...prev, ...map }))
+  }
+  async function uploadFiles(b: Block, files: FileList | File[]) {
+    const arr = Array.from(files)
+    if (!arr.length) return
+    const added: { path: string; name: string; size: number; type: string }[] = []
+    for (const f of arr) {
+      if (f.size > 50 * 1024 * 1024) { alert(`${f.name} is larger than 50 MB.`); continue }
+      const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
+      const path = `${board.id}/${b.id}/${Date.now()}-${safe}`
+      const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
+      if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload failed: ' + error.message); continue }
+      added.push({ path, name: f.name, size: f.size, type: f.type })
+    }
+    if (!added.length) return
+    await update(b.id, { props: { ...b.props, files: [...(b.props?.files || []), ...added] } })
+    const { data } = await supabase.storage.from(BUCKET).createSignedUrls(added.map(a => a.path), 60 * 60 * 6)
+    const map: Record<string, string> = {}
+    for (const d of data || []) if (d.signedUrl && d.path) map[d.path] = d.signedUrl
+    setUrls(prev => ({ ...prev, ...map }))
+  }
+  async function removeFile(b: Block, path: string) {
+    await update(b.id, { props: { ...b.props, files: (b.props?.files || []).filter((f: any) => f.path !== path) } })
+    await supabase.storage.from(BUCKET).remove([path])
   }
   async function removeImage(b: Block, path: string) {
     await update(b.id, { props: { ...b.props, paths: (b.props?.paths || []).filter((p: string) => p !== path) } })
@@ -304,6 +330,13 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     if (b.type === 'image') return (
       <Row key={b.id} controls={controls}>
         <ImageBlock block={b} urls={urls} onUpload={f => uploadImages(b, f)} onRemove={p => removeImage(b, p)} onOpen={i => setLightbox({ paths: b.props?.paths || [], i })} />
+        {mk}
+      </Row>
+    )
+
+    if (b.type === 'file') return (
+      <Row key={b.id} controls={controls}>
+        <FileBlock block={b} urls={urls} onUpload={f => uploadFiles(b, f)} onRemove={p => removeFile(b, p)} />
         {mk}
       </Row>
     )
@@ -498,6 +531,47 @@ function ImageBlock({ block, urls, onUpload, onRemove, onOpen }: { block: Block;
       </div>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { if (e.target.files) up(e.target.files); e.target.value = '' }} />
       <style>{`.ts-img .ts-img-x { opacity: 0; transition: opacity .15s } .ts-img:hover .ts-img-x { opacity: 1 } @media (hover: none) { .ts-img .ts-img-x { opacity: .8 } }`}</style>
+    </div>
+  )
+}
+
+function FileBlock({ block, urls, onUpload, onRemove }: { block: Block; urls: Record<string, string>; onUpload: (f: FileList | File[]) => Promise<void> | void; onRemove: (p: string) => void }) {
+  const input = useRef<HTMLInputElement>(null)
+  const [drag, setDrag] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
+  const files: { path: string; name: string; size: number; type: string }[] = block.props?.files || []
+  const up = async (f: FileList | File[]) => { setBusy(true); await onUpload(f); setBusy(false) }
+  const fmt = (n: number) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
+  const isPdf = (f: { name: string; type: string }) => /pdf/i.test(f.type) || /\.pdf$/i.test(f.name)
+  const icon = (f: { name: string }) => /\.pdf$/i.test(f.name) ? '📕' : /\.(docx?|pages)$/i.test(f.name) ? '📘' : /\.(xlsx?|csv|numbers)$/i.test(f.name) ? '📗' : /\.(pptx?|key)$/i.test(f.name) ? '📙' : '📄'
+  const btn: React.CSSProperties = { fontFamily: MONO, fontSize: 9.5, letterSpacing: 1, padding: '5px 9px', borderRadius: 7, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(80,180,255,0.07)', border: '1px solid rgba(120,190,255,0.22)', textDecoration: 'none', whiteSpace: 'nowrap' }
+  return (
+    <div onDragOver={e => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={e => { e.preventDefault(); setDrag(false); up(e.dataTransfer.files) }}
+      style={{ flex: 1, minWidth: 0, borderRadius: 12, outline: drag ? '2px dashed rgba(120,190,255,0.6)' : 'none' }}>
+      {files.map(f => (
+        <div key={f.path} style={{ marginBottom: 8, borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(120,190,255,0.18)', background: 'rgba(10,24,54,0.55)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px' }}>
+            <span style={{ fontSize: 24 }}>{icon(f)}</span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600, color: '#eef6ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+              <span style={{ fontFamily: MONO, fontSize: 9.5, color: DIM }}>{fmt(f.size)}{isPdf(f) ? ' · PDF' : ''}</span>
+            </span>
+            {isPdf(f) && urls[f.path] && <button onClick={() => setPreview(preview === f.path ? null : f.path)} style={btn}>{preview === f.path ? 'HIDE' : 'PREVIEW'}</button>}
+            {urls[f.path] && <a href={urls[f.path]} target="_blank" rel="noreferrer" style={btn}>OPEN ↗</a>}
+            <button onClick={() => { if (confirm(`Remove ${f.name}?`)) onRemove(f.path) }} style={{ ...btn, color: 'rgba(248,113,113,0.8)', borderColor: 'rgba(248,113,113,0.3)', background: 'transparent' }}>✕</button>
+          </div>
+          {preview === f.path && urls[f.path] && (
+            <iframe src={urls[f.path]} title={f.name} style={{ display: 'block', width: '100%', height: 560, border: 'none', borderTop: '1px solid rgba(120,190,255,0.12)', background: '#fff' }} />
+          )}
+        </div>
+      ))}
+      <button onClick={() => input.current?.click()} style={{ width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer', background: 'rgba(80,180,255,0.04)', border: '1px dashed rgba(120,190,255,0.3)', color: 'rgba(160,205,250,0.75)', fontFamily: MONO, fontSize: 10, letterSpacing: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <span style={{ fontSize: 16 }}>{busy ? '◌' : '📄'}</span>{busy ? 'UPLOADING…' : files.length ? '+ ADD FILE' : 'UPLOAD PDF / DOCUMENT'}
+        {!files.length && !busy && <span style={{ fontSize: 8.5, color: DIM, letterSpacing: 0.5 }}>or drag & drop</span>}
+      </button>
+      <input ref={input} type="file" multiple hidden accept=".pdf,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.pages,.numbers,.key,.zip"
+        onChange={e => { if (e.target.files) up(e.target.files); e.target.value = '' }} />
     </div>
   )
 }
