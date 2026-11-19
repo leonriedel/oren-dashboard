@@ -9,3 +9,4 @@ edgar-scalper/.env
 edgar-scalper/.venv/
 edgar-scalper/.env
 edgar-scalper/edgar_state.json
+edgar-scalper/.bars_cache.pkl
