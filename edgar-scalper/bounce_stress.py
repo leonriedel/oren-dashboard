@@ -15,14 +15,14 @@ import strategy_lab as lab
 import swing_tune
 
 
-def spec(k=2.0, exit_ma="ma20", hold=12):
+def spec(k=2.0, exit_ma="ma20", hold=12, stop_atr=None):
     def entry(d):
         sd = d["close"].rolling(20).std(ddof=0)
         return (d["close"] > d["ma200"]) & (d["close"] < d["ma20"] - k * sd)
     return dict(
         entry=entry,
         rank=lambda d: (d["close"] - d["bb_lo"]) / d["close"],
-        exit=lambda r, e, n: r["close"] > r[exit_ma] or n >= hold,
+        exit=lambda r, e, n: r["close"] > r[exit_ma] or n >= hold or (stop_atr is not None and r["low"] <= e - stop_atr * r["atr"]),
     )
 
 
@@ -66,6 +66,14 @@ def main():
 
     print("\n3 · COSTS\n" + hdr + "\n" + "─" * len(hdr))
     run("slippage 0.15% per side (3×)", data, spy, dates, capital, spec(), slip=0.0015)
+
+    print("\n4 · LIVE CONFIG (2σ, exit MA10, max 12 days, 5 slots)\n" + hdr + "\n" + "─" * len(hdr))
+    live = spec(exit_ma="ma10")
+    run("live config", data, spy, dates, capital, live)
+    run("live config + 3×ATR disaster stop", data, spy, dates, capital, spec(exit_ma="ma10", stop_atr=3.0))
+    run("live config · without top 5", {s: d for s, d in data.items() if s not in top5}, spy, dates, capital, live)
+    run("live config · 3× slippage", data, spy, dates, capital, live, slip=0.0015)
+    run("live config · $2,500", data, spy, dates, capital / 2, live)
 
     print("\nprofit by stock (baseline):  " + "  ".join(f"{s} {v:+.0f}" for s, v in sorted(pnl.items(), key=lambda x: -x[1])))
     print("\n✓ = profitable in both halves and PF > 1.2.  Robust = most rows ✓, especially 'without top 5' and '3× slippage'.")

@@ -1,37 +1,60 @@
 """
-EDGAR SWING · IBKR execution + bookkeeping
+EDGAR BOUNCE · IBKR execution + bookkeeping
+
+Daily cycle (after the US close, with that day's final bars):
+  1) exits   — every Edgar position with close > MA10 or held ≥ MAX_HOLD days → its disaster stop is cancelled and a
+               SELL market-on-open order is queued for tomorrow's open
+  2) entries — stocks in an uptrend that closed below their lower Bollinger band, deepest first, into free slots →
+               BUY limit-on-open (skipped if it gaps up > ENTRY_GAP_MAX) with a GTC disaster stop attached
 
 Safety rails
-  • Connects to IB Gateway with the dedicated Edgar username; refuses to run unless IBKR_ACCOUNT is one of the
-    gateway's managed accounts. Every order and every query is pinned to IBKR_ACCOUNT.
-  • Only trades the whitelist in swing_config.UNIVERSE, only BUY-to-open / SELL-to-close.
-  • Never touches a position it did not open (tracked in edgar_state.json + orderRef "EDGAR").
+  • Connects with the dedicated Edgar username; refuses to run unless IBKR_ACCOUNT is one of the gateway's managed
+    accounts. Every order and query is pinned to IBKR_ACCOUNT.
+  • Only trades swing_config.UNIVERSE, only BUY-to-open / SELL-to-close, never sells more than it holds.
+  • Never trades on stale data: if today's bar isn't in yet, the cycle retries 15 minutes later.
   • EDGAR_LIVE != "true" → read-only connection, logs what it would do.
-  • Stops/targets are bracket orders held at IBKR (they work even if the Mac is off).
+  • Halts new entries if Edgar's capital falls MAX_DRAWDOWN_HALT below its high-water mark.
 """
 from __future__ import annotations
 import json
 import math
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from ib_insync import IB, Stock, LimitOrder, StopOrder
+from ib_insync import IB, Stock, LimitOrder, MarketOrder, StopOrder
 
 import swing_config as cfg
 import swing_data
-import swing_strategy as strat
+import bounce_strategy as strat
 import journal
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), "edgar_state.json")
+NY = ZoneInfo("America/New_York")
 
 
-# ─── local state (entries, initial risk, processed fills) ───
+def ny_today() -> str:
+    return datetime.now(NY).date().isoformat()
+
+
+def last_session() -> str:
+    """Most recent completed US trading day (weekdays; before 16:15 ET → previous weekday)."""
+    now = datetime.now(NY)
+    d = now.date()
+    if now.weekday() < 5 and (now.hour, now.minute) < (16, 15):
+        d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.isoformat()
+
+
+# ─── local state ───
 def load_state() -> dict:
     try:
         with open(STATE_FILE) as f:
             return json.load(f)
     except Exception:
-        return {"positions": {}, "fills": [], "last_cycle": None, "new_today": {}}
+        return {"positions": {}, "fills": [], "last_cycle": None}
 
 
 def save_state(s: dict) -> None:
@@ -50,7 +73,7 @@ class Broker:
         if self.ib.isConnected():
             return
         if not self.acct:
-            raise RuntimeError("IBKR_ACCOUNT missing in .env (the NEW Edgar account id, e.g. U1234567)")
+            raise RuntimeError("IBKR_ACCOUNT missing in .env (the Edgar account id, e.g. U1234567)")
         self.ib.connect(cfg.IBKR_HOST, cfg.IBKR_PORT, clientId=cfg.IBKR_CLIENT, readonly=not cfg.LIVE, timeout=15)
         accts = self.ib.managedAccounts()
         if self.acct not in accts:
@@ -64,19 +87,23 @@ class Broker:
     def capital_usd(self) -> float:
         vals = self.ib.accountValues(self.acct)
         nav_base = next((float(v.value) for v in vals if v.tag == "NetLiquidation" and v.currency not in ("", "USD")), None)
-        nav_usd_direct = next((float(v.value) for v in vals if v.tag == "NetLiquidation" and v.currency == "USD"), None)
-        usd_rate = next((float(v.value) for v in vals if v.tag == "ExchangeRate" and v.currency == "USD"), None)  # base per 1 USD
-        if nav_usd_direct is not None:
-            cap = nav_usd_direct
-        elif nav_base is not None and usd_rate:
-            cap = nav_base / usd_rate
-        else:
-            cap = 0.0
+        nav_usd = next((float(v.value) for v in vals if v.tag == "NetLiquidation" and v.currency == "USD"), None)
+        usd_rate = next((float(v.value) for v in vals if v.tag == "ExchangeRate" and v.currency == "USD"), None)
+        cap = nav_usd if nav_usd is not None else (nav_base / usd_rate if (nav_base is not None and usd_rate) else 0.0)
         if cfg.BUDGET_EUR > 0:
             eur_rate = next((float(v.value) for v in vals if v.tag == "ExchangeRate" and v.currency == "EUR"), None)
             budget_usd = cfg.BUDGET_EUR * ((eur_rate / usd_rate) if (eur_rate and usd_rate) else 1.08)
             cap = min(cap, budget_usd) if cap else budget_usd
         return cap
+
+    def cash_usd(self) -> float:
+        """Buying power for new entries, in USD (cash account → settled + available funds)."""
+        vals = self.ib.accountValues(self.acct)
+        rate = next((float(v.value) for v in vals if v.tag == "ExchangeRate" and v.currency == "USD"), None)
+        base = next((float(v.value) for v in vals if v.tag == "AvailableFunds" and v.currency not in ("", "USD")), None)
+        if base is not None and rate:
+            return base / rate
+        return next((float(v.value) for v in vals if v.tag == "AvailableFunds" and v.currency == "USD"), 0.0)
 
     def nav_base(self) -> float:
         vals = self.ib.accountValues(self.acct)
@@ -98,37 +125,27 @@ class Broker:
         self.ib.qualifyContracts(c)
         return c
 
-    def place_entry(self, sig: strat.Signal, qty: int) -> list[int]:
+    def place_entry(self, sig: strat.Signal, qty: int) -> int:
+        """BUY limit-on-open + GTC disaster stop (child, activates when the buy fills)."""
         c = self._contract(sig.symbol)
-        ids: list[int] = []
-        q_trail = qty // 2 if qty >= 2 else qty
-        q_tp = qty - q_trail
-        if q_tp > 0:
-            bracket = self.ib.bracketOrder("BUY", q_tp, sig.limit, sig.target, sig.stop)
-            for o in bracket:
-                o.account = self.acct
-                o.orderRef = f"{cfg.ORDER_REF}-TP"
-                o.tif = "DAY" if o.action == "BUY" else "GTC"
-            for o in bracket:
-                self.ib.placeOrder(c, o)
-            ids.append(bracket[0].orderId)
-        parent = LimitOrder("BUY", q_trail, sig.limit, account=self.acct, orderRef=f"{cfg.ORDER_REF}-TRAIL", tif="DAY", transmit=False)
+        parent = LimitOrder("BUY", qty, sig.limit, account=self.acct, orderRef=f"{cfg.ORDER_REF}-IN", tif="OPG", transmit=False)
         parent.orderId = self.ib.client.getReqId()
-        stop = StopOrder("SELL", q_trail, sig.stop, account=self.acct, orderRef=f"{cfg.ORDER_REF}-TRAIL", tif="GTC", parentId=parent.orderId, transmit=True)
+        stop = StopOrder("SELL", qty, sig.stop, account=self.acct, orderRef=f"{cfg.ORDER_REF}-STOP", tif="GTC",
+                         parentId=parent.orderId, transmit=True)
         self.ib.placeOrder(c, parent)
         self.ib.placeOrder(c, stop)
-        ids.append(parent.orderId)
         self.ib.sleep(2)
-        return ids
+        return parent.orderId
 
-    def raise_trail_stop(self, symbol: str, new_stop: float) -> bool:
+    def place_exit(self, symbol: str, qty: int) -> None:
+        """Cancel Edgar's stop for this symbol, then SELL market-on-open."""
         for t in self.edgar_orders():
-            o = t.order
-            if t.contract.symbol == symbol and o.orderType == "STP" and o.orderRef == f"{cfg.ORDER_REF}-TRAIL" and new_stop > (o.auxPrice or 0) + 0.01:
-                o.auxPrice = round(new_stop, 2)
-                self.ib.placeOrder(t.contract, o)
-                return True
-        return False
+            if t.contract.symbol == symbol and t.order.action == "SELL" and t.order.orderType in ("STP", "STP LMT"):
+                self.ib.cancelOrder(t.order)
+        self.ib.sleep(1)
+        o = MarketOrder("SELL", qty, account=self.acct, orderRef=f"{cfg.ORDER_REF}-OUT", tif="OPG")
+        self.ib.placeOrder(self._contract(symbol), o)
+        self.ib.sleep(2)
 
 
 # ─── bookkeeping: positions/fills → OREN journal ───
@@ -138,129 +155,131 @@ def reconcile(b: Broker, state: dict) -> None:
     seen = set(state.setdefault("fills", []))
     open_rows = {t["symbol"]: t for t in journal.open_positions() if (t.get("broker") or "").startswith("ibkr")}
 
-    # new SELL fills (partial exits) → accumulate realized proceeds
     for f in b.ib.fills():
         e = f.execution
         if e.acctNumber != b.acct or e.execId in seen or not str(e.orderRef or "").startswith(cfg.ORDER_REF):
             continue
         seen.add(e.execId)
-        sym = f.contract.symbol
-        rec = st_pos.setdefault(sym, {})
-        comm = float(f.commissionReport.commission or 0) if f.commissionReport else 0.0
-        rec["commission"] = rec.get("commission", 0.0) + comm
+        rec = st_pos.setdefault(f.contract.symbol, {})
+        rec["commission"] = rec.get("commission", 0.0) + (float(f.commissionReport.commission or 0) if f.commissionReport else 0.0)
+        if e.side == "BOT":
+            try:
+                rec["entry_date"] = e.time.astimezone(NY).date().isoformat()
+            except Exception:
+                rec["entry_date"] = ny_today()
         if e.side == "SLD":
             rec["sold_qty"] = rec.get("sold_qty", 0) + e.shares
             rec["sold_value"] = rec.get("sold_value", 0.0) + e.shares * e.price
+            if str(e.orderRef).endswith("STOP"):
+                rec["exit_reason"] = "STOP"
     state["fills"] = list(seen)
 
-    # opened
     for sym, (qty, avg) in pos.items():
         if sym not in cfg.UNIVERSE or qty <= 0:
             continue
         rec = st_pos.setdefault(sym, {})
+        rec.setdefault("entry_date", ny_today())  # fallback if the fill happened while Edgar was offline
         if sym not in open_rows and rec.get("signal_id"):
             sig = rec.get("signal", {})
             tid = journal.open_trade(rec["signal_id"], {**sig, "price": avg}, size=qty, dry_run=False, broker="ibkr", note=f"ibkr:{sym}")
             rec.update({"trade_id": tid, "entry": avg, "qty_open": qty})
             print(f"[edgar] OPENED {sym} {qty} @ {avg:.2f}")
 
-    # closed (flat at IBKR, open in journal)
     for sym, row in open_rows.items():
         if sym in pos:
             continue
         rec = st_pos.get(sym, {})
-        qty = float(row["size"])
-        entry = float(row["entry"])
+        qty, entry = float(row["size"]), float(row["entry"])
         sold_qty = rec.get("sold_qty", 0) or qty
         exit_px = (rec.get("sold_value", 0.0) / sold_qty) if rec.get("sold_value") else entry
         pnl = (exit_px - entry) * qty - rec.get("commission", 0.0)
-        reason = "TP" if row.get("tp") and exit_px >= float(row["tp"]) * 0.995 else "STOP"
-        journal.close_trade(row["id"], exit_price=exit_px, exit_reason=reason, pnl=pnl, pnl_pct=(exit_px / entry - 1) * 100)
+        journal.close_trade(row["id"], exit_price=exit_px, exit_reason=rec.get("exit_reason", "EXIT"), pnl=pnl, pnl_pct=(exit_px / entry - 1) * 100)
         print(f"[edgar] CLOSED {sym} @ {exit_px:.2f} · pnl ${pnl:.2f}")
         st_pos.pop(sym, None)
 
 
 # ─── the daily cycle ───
-def daily_cycle(b: Broker, state: dict) -> None:
-    today = datetime.now(timezone.utc).date().isoformat()
-    bars = swing_data.universe_bars(cfg.UNIVERSE + [cfg.MARKET])
-    spy = bars.get(cfg.MARKET)
-    risk_on = spy is not None and strat.market_ok(spy)
-    print(f"[edgar] market filter SPY>MA200: {'ON' if risk_on else 'OFF — no new entries'}")
+def daily_cycle(b: Broker, state: dict) -> bool:
+    """Returns True when the cycle ran on the last session's final data (False → retry next loop)."""
+    today = last_session()
+    bars = swing_data.universe_bars(cfg.UNIVERSE)
+    fresh = [s for s, df in bars.items() if str(df.index[-1]) == today]
+    if len(fresh) < 0.8 * len(cfg.UNIVERSE):
+        print(f"[edgar] bars for {today} not in yet ({len(fresh)}/{len(cfg.UNIVERSE)}) — retry next loop")
+        return False
+    bars = {s: bars[s] for s in fresh}
 
     pos = b.positions()
     st_pos = state.setdefault("positions", {})
+    orders = b.edgar_orders()
+    pending_buy = {t.contract.symbol for t in orders if t.order.action == "BUY"}
+    pending_sell = {t.contract.symbol for t in orders if t.order.action == "SELL" and t.order.orderType == "MKT"}
 
-    # 1) trail stops on open positions
+    # forget entries that never filled (opened above the limit)
+    for sym in list(st_pos):
+        r = st_pos[sym]
+        if sym not in pos and sym not in pending_buy and r.get("date") and r.get("date") != today and not r.get("trade_id"):
+            print(f"[edgar] {sym}: entry from {r.get('date')} did not fill — dropped")
+            st_pos.pop(sym)
+
+    # 1) exits
+    exiting = set()
     for sym, (qty, avg) in pos.items():
-        if sym not in cfg.UNIVERSE or sym not in bars:
+        if sym not in cfg.UNIVERSE or sym not in bars or qty <= 0 or sym in pending_sell:
             continue
-        rec = st_pos.get(sym, {})
-        risk = rec.get("risk_per_share") or (avg * 0.05)
-        cur = rec.get("trail_stop") or rec.get("signal", {}).get("sl") or 0
-        new = strat.trail_stop(bars[sym], avg, float(cur), float(risk))
-        if new > cur:
-            ok = b.raise_trail_stop(sym, new) if cfg.LIVE else False
-            print(f"[edgar] trail {sym}: {cur} → {new} {'(sent)' if ok else '(dry/no order)'}")
-            if ok or not cfg.LIVE:
-                rec["trail_stop"] = new
+        rec = st_pos.setdefault(sym, {})
+        go, why = strat.should_exit(bars[sym], rec.get("entry_date", today))
+        print(f"[edgar] {sym}: {'EXIT → ' if go else ''}{why}")
+        if go:
+            rec["exit_reason"] = "TIME" if why.startswith("time") else "MA10"
+            exiting.add(sym)
+            if cfg.LIVE:
+                try:
+                    b.place_exit(sym, int(qty))
+                    print(f"[edgar] → SELL {int(qty)} {sym} at tomorrow's open")
+                except Exception as e:
+                    journal.log_error(f"exit {sym}: {e}")
 
-    # 2) new entries
-    if not risk_on:
-        return
-    pending = {t.contract.symbol for t in b.edgar_orders() if t.order.action == "BUY"}
-    held = set(pos) | pending
-    slots = cfg.MAX_OPEN - len([s for s in held if s in cfg.UNIVERSE])
-    new_today = state.setdefault("new_today", {}).get(today, 0)
-    since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    try:
-        closed = journal.client().table("edgar_trades").select("pnl").eq("broker", "ibkr").gt("closed_at", since).execute().data or []
-        day_pnl = sum((r.get("pnl") or 0) for r in closed)
-    except Exception:
-        day_pnl = 0.0
+    # 2) entries
     capital = b.capital_usd()
     if capital <= 0:
         journal.log_error("Edgar capital is 0 — fund the Edgar account")
-        return
-    if day_pnl <= -cfg.MAX_DAILY_LOSS * capital:
-        print("[edgar] daily loss limit reached — no new entries")
-        return
+        return True
+    hwm = max(state.get("hwm", 0.0), capital)
+    state["hwm"] = hwm
+    if capital < hwm * (1 - cfg.MAX_DRAWDOWN_HALT):
+        msg = f"drawdown halt: capital ${capital:,.0f} is {(1 - capital / hwm) * 100:.0f}% below its high ${hwm:,.0f} — no new entries"
+        print(f"[edgar] {msg}")
+        journal.log_error(msg)
+        return True
 
-    signals = []
-    for sym in cfg.UNIVERSE:
-        if sym in held or sym not in bars:
-            continue
-        s = strat.scan(sym, bars[sym])
-        if s:
-            signals.append(s)
-    signals.sort(key=lambda s: 0 if s.setup == "PULLBACK" else 1)
-
-    for s in signals:
-        if slots <= 0 or new_today >= cfg.MAX_NEW_PER_DAY:
-            break
-        qty = math.floor(capital * cfg.RISK_PER_TRADE / s.risk_per_share)
-        qty = min(qty, math.floor(capital * cfg.MAX_POSITION_PCT / s.limit))
+    held = (set(s for s in pos if s in cfg.UNIVERSE) | pending_buy) - exiting
+    slots = max(0, min(cfg.MAX_OPEN - len(held), cfg.MAX_NEW_PER_DAY))
+    blocked = held | exiting
+    signals = sorted((sig for sig in (strat.scan(sym, df) for sym, df in bars.items() if sym not in blocked) if sig), key=lambda s: s.depth)
+    print(f"[edgar] {len(signals)} setup(s) today: {', '.join(s.symbol for s in signals) or '—'} · {slots} free slot(s) · capital ${capital:,.0f}")
+    cash = b.cash_usd()
+    for s in signals[:slots]:
+        qty = math.floor(min(capital / cfg.MAX_OPEN, cash) / s.limit)
         if qty < 1:
-            print(f"[edgar] {s.symbol}: position too small for capital ${capital:.0f} — skip")
+            print(f"[edgar] {s.symbol}: not enough cash for 1 share — skip")
             continue
+        cash -= qty * s.limit
         sig_dict = {
-            "ts": datetime.now(timezone.utc).isoformat(), "symbol": s.symbol, "timeframe": "1d", "side": "LONG",
-            "confidence": 0.75 if s.setup == "PULLBACK" else 0.7, "price": s.limit, "sl": s.stop, "tp": s.target,
-            "reasons": [s.setup] + s.reasons,
+            "ts": datetime.utcnow().isoformat(), "symbol": s.symbol, "timeframe": "1d", "side": "LONG",
+            "confidence": 0.7, "price": s.close, "sl": s.stop, "tp": None, "reasons": ["BB-BOUNCE"] + s.reasons,
         }
         sig_id = journal.log_signal(sig_dict, dry_run=not cfg.LIVE)
-        print(f"[edgar] SIGNAL {s.symbol} {s.setup} qty={qty} limit={s.limit} stop={s.stop} target={s.target}")
-        st_pos[s.symbol] = {"signal_id": sig_id, "signal": sig_dict, "risk_per_share": s.risk_per_share, "trail_stop": s.stop, "date": today}
+        print(f"[edgar] SIGNAL {s.symbol} qty={qty} close={s.close} limit-on-open={s.limit} stop={s.stop}")
+        st_pos[s.symbol] = {"signal_id": sig_id, "signal": sig_dict, "date": today}
         if cfg.LIVE:
             try:
                 b.place_entry(s, qty)
-                print(f"[edgar] → orders sent for {s.symbol}")
+                print(f"[edgar] → BUY {qty} {s.symbol} at tomorrow's open (limit {s.limit})")
             except Exception as e:
                 journal.log_error(f"order {s.symbol}: {e}")
-                continue
-        slots -= 1
-        new_today += 1
-    state["new_today"] = {today: new_today}
+                st_pos.pop(s.symbol, None)
+    return True
 
 
 def snapshot(b: Broker) -> None:

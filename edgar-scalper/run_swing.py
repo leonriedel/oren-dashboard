@@ -1,5 +1,5 @@
 """
-EDGAR SWING · main loop
+EDGAR BOUNCE · main loop
 
   ~/edgar-venv/bin/python run_swing.py          # runs forever (every 15 min)
   ~/edgar-venv/bin/python run_swing.py --once   # one full cycle now (for testing)
@@ -14,16 +14,17 @@ from zoneinfo import ZoneInfo
 
 import swing_config as cfg
 import journal
-from ibkr_swing import Broker, load_state, save_state, reconcile, daily_cycle, snapshot
+from ibkr_swing import Broker, load_state, save_state, reconcile, daily_cycle, snapshot, last_session
 
 NY = ZoneInfo("America/New_York")
 
 
 def in_window(now: datetime) -> bool:
+    """Any time except the US session (09:15–16:20 ET on weekdays): orders are queued for the next open."""
     if now.weekday() >= 5:
-        return False
+        return True
     t = (now.hour, now.minute)
-    return cfg.RUN_AFTER_ET <= t <= cfg.RUN_BEFORE_ET
+    return not ((9, 15) <= t < cfg.RUN_AFTER_ET)
 
 
 def tick(b: Broker, force: bool = False) -> None:
@@ -33,17 +34,17 @@ def tick(b: Broker, force: bool = False) -> None:
     journal.heartbeat(mode=mode, universe=cfg.UNIVERSE, version=cfg.VERSION, last_scan=datetime.utcnow().isoformat())
     reconcile(b, state)
     now = datetime.now(NY)
-    today = now.date().isoformat()
-    if force or (in_window(now) and state.get("last_cycle") != today):
-        print(f"\n[edgar] ═══ daily cycle {today} ═══")
-        daily_cycle(b, state)
-        snapshot(b)
-        state["last_cycle"] = today
+    session = last_session()
+    if force or (in_window(now) and state.get("last_cycle") != session):
+        print(f"\n[edgar] ═══ daily cycle for session {session} ═══")
+        if daily_cycle(b, state):
+            snapshot(b)
+            state["last_cycle"] = session
     save_state(state)
 
 
 def main() -> None:
-    print(f"[edgar] SWING {cfg.VERSION} · account {cfg.IBKR_ACCOUNT or '?'} · {'LIVE' if cfg.LIVE else 'DRY-RUN'} · universe {', '.join(cfg.UNIVERSE)}")
+    print(f"[edgar] BOUNCE {cfg.VERSION} · account {cfg.IBKR_ACCOUNT or '?'} · {'LIVE' if cfg.LIVE else 'DRY-RUN'} · universe {', '.join(cfg.UNIVERSE)}")
     b = Broker()
     if "--once" in sys.argv:
         tick(b, force=True)

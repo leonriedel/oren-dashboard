@@ -1,5 +1,5 @@
 """
-EDGAR SWING · config  (long-only daily swing trading on a separate IBKR account)
+EDGAR BOUNCE · config  (long-only Bollinger-bounce trading on a separate IBKR account)
 
 .env on the OREN Mac:
   POLYGON_API_KEY        Massive/Polygon key (daily bars for signals)
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-VERSION = "swing-1.0"
+VERSION = "bounce-1.0"
 
 POLYGON_KEY  = os.getenv("POLYGON_API_KEY") or os.getenv("MASSIVE_API_KEY") or ""
 IBKR_ACCOUNT = os.getenv("IBKR_ACCOUNT", "").strip()
@@ -27,30 +27,33 @@ LIVE         = os.getenv("EDGAR_LIVE", "false").lower() == "true"
 BUDGET_EUR   = float(os.getenv("EDGAR_BUDGET_EUR", "0") or 0)
 
 # ─── universe: liquid US stocks (whitelist — Edgar trades NOTHING else) ───
-# EU retail clients cannot buy US-domiciled ETFs at IBKR (PRIIPs/KID rule) → single stocks covering the same themes.
+# EU retail clients cannot buy US-domiciled ETFs at IBKR (PRIIPs/KID rule) → single stocks.
+# Same 30 names the strategy was stress-tested on (bounce_stress.py).
 UNIVERSE = [
-    "NEM", "AEM", "WPM",                       # gold
-    "FCX", "XOM", "CCJ",                       # copper, energy, uranium
-    "NVDA", "AMD", "AVGO", "TSM",              # semiconductors
-    "MSFT", "AMZN", "META", "GOOGL",           # mega-cap tech
+    "NEM", "AEM", "WPM", "FCX", "XOM", "CCJ",
+    "NVDA", "AMD", "AVGO", "TSM", "MSFT", "AMZN", "META", "GOOGL",
+    "AAPL", "NFLX", "ORCL", "PLTR", "UBER", "SHOP", "CRWD", "ANET", "MU", "LRCX", "VRT",
+    "CAT", "GE", "JPM", "LLY", "COST",
 ]
-MARKET   = "SPY"   # market filter
+MARKET   = "SPY"   # only for the dashboard / reference (the bounce strategy tested best WITHOUT a market filter)
 
-# ─── strategy ───
-MA_FAST, MA_MID, MA_SLOW = 20, 50, 200
-ATR_N            = 14
-BREAKOUT_LOOKBACK = 20
-STOP_ATR         = 2.0      # stop = min(10-day low, entry - 2×ATR)
-TARGET_R         = 2.0      # first half exits at +2R, rest trails
-TRAIL_ATR        = 0.5      # trail stop = MA20 - 0.5×ATR once trade is +1R
-ENTRY_SLIPPAGE   = 0.004    # limit = close × 1.004 (no chasing big gaps)
+# ─── strategy: Bollinger bounce in uptrend (see bounce_strategy.py) ───
+BB_N           = 20
+BB_K           = 2.0       # lower band = MA20 − 2σ
+EXIT_MA        = 10        # sell when close > MA10
+MAX_HOLD       = 12        # …or after 12 trading days
+STOP_ATR       = 3.0       # disaster stop (GTC at IBKR) = signal close − 3×ATR
+ENTRY_GAP_MAX  = 0.03      # limit-on-open: skip if the stock opens > 3% above the signal close
 
 # ─── risk (hard limits) ───
-RISK_PER_TRADE   = 0.01     # 1% of Edgar capital per trade
-MAX_POSITION_PCT = 0.35     # max 35% of Edgar capital in one position
-MAX_OPEN         = 3
-MAX_NEW_PER_DAY  = 2
-MAX_DAILY_LOSS   = 0.04     # stop opening new trades if Edgar is down 4% today
+MAX_OPEN         = 5       # equal slots: each position ≈ 1/5 of Edgar capital
+MAX_NEW_PER_DAY  = 5
+MAX_DRAWDOWN_HALT = 0.20   # Edgar stops opening trades if his capital is 20% below its high-water mark
+
+# legacy (old swing strategy / swing_backtest.py)
+MA_FAST, MA_MID, MA_SLOW = 20, 50, 200
+ATR_N, BREAKOUT_LOOKBACK, TARGET_R, TRAIL_ATR, ENTRY_SLIPPAGE = 14, 20, 2.0, 0.5, 0.004
+RISK_PER_TRADE, MAX_POSITION_PCT, MAX_DAILY_LOSS = 0.01, 0.35, 0.04
 
 # ─── schedule (New York time) ───
 RUN_AFTER_ET   = (16, 20)   # daily cycle after US close
