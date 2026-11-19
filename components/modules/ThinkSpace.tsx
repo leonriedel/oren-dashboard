@@ -11,6 +11,7 @@ type Board = {
   created_by: string | null
   updated_at: string
   blockCount?: number
+  mikhaCount?: number
 }
 
 type Block = {
@@ -20,6 +21,23 @@ type Block = {
   content: string
   done: boolean
   position: number
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+// Mikha marker: everything written or last edited by someone other than Leon gets a pink M
+const LEON_ID = '453d97b5-1e01-48c5-9f0b-8345039b3dca'
+const isMikha = (id?: string | null) => !!id && id !== LEON_ID
+function MBadge({ edited, count }: { edited?: boolean; count?: number }) {
+  return (
+    <span title={edited ? 'von Mikha geändert' : 'von Mikha geschrieben'} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, alignSelf: 'center',
+      fontFamily: 'Space Mono, monospace', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5,
+      color: '#ff5fb7', padding: '1px 6px', borderRadius: 6, marginLeft: 6,
+      background: edited ? 'transparent' : 'rgba(255,95,183,0.14)', border: '1px solid rgba(255,95,183,0.55)',
+      boxShadow: '0 0 8px rgba(255,95,183,0.25)',
+    }}>M{edited ? '✎' : ''}{count ? ` ${count}` : ''}</span>
+  )
 }
 
 const PRESET_COLORS = ['#80c0ff', '#34d399', '#fbbf24', '#f97316', '#a78bfa', '#ff6b6b', '#38bdf8']
@@ -44,9 +62,14 @@ export default function ThinkSpace({ onBack }: any) {
     if (!bs) { setBoards([]); setLoading(false); return }
     // Fetch block counts
     const counts: Record<string, number> = {}
-    const { data: blocks } = await supabase.from('workspace_blocks').select('board_id')
-    for (const b of blocks || []) counts[b.board_id] = (counts[b.board_id] || 0) + 1
-    setBoards(bs.map(b => ({ ...b, blockCount: counts[b.id] || 0 })))
+    const mikha: Record<string, number> = {}
+    let res: any = await supabase.from('workspace_blocks').select('board_id,created_by,updated_by')
+    if (res.error) res = await supabase.from('workspace_blocks').select('board_id,created_by')
+    for (const b of res.data || []) {
+      counts[b.board_id] = (counts[b.board_id] || 0) + 1
+      if (isMikha(b.created_by) || isMikha(b.updated_by)) mikha[b.board_id] = (mikha[b.board_id] || 0) + 1
+    }
+    setBoards(bs.map(b => ({ ...b, blockCount: counts[b.id] || 0, mikhaCount: mikha[b.id] || 0 })))
     setLoading(false)
   }, [supabase])
 
@@ -152,14 +175,14 @@ function BoardTile({ board, onOpen, onDelete }: any) {
         <div style={{ fontSize:28, marginBottom:10 }}>{board.emoji}</div>
         <div style={{
           fontFamily:'Inter, sans-serif', fontSize:17, fontWeight:600, color:'#f5f5f5',
-          letterSpacing:0.3, lineHeight:1.2,
-        }}>{board.title}</div>
+          letterSpacing:0.3, lineHeight:1.2, display:'flex', alignItems:'center', flexWrap:'wrap',
+        }}>{board.title}{isMikha(board.created_by) && <MBadge />}</div>
       </div>
       <div style={{
         marginTop:14, fontSize:9, letterSpacing:1.5, color:'rgba(128,192,255,0.45)',
         display:'flex', justifyContent:'space-between',
       }}>
-        <span>{board.blockCount || 0} ITEMS</span>
+        <span>{board.blockCount || 0} ITEMS{board.mikhaCount ? <span style={{ color: '#ff5fb7', marginLeft: 8 }}>● M {board.mikhaCount}</span> : null}</span>
         <span>OPEN →</span>
       </div>
     </div>
@@ -249,8 +272,11 @@ function BoardDetail({ board, onBack, supabase }: any) {
   }
 
   const updateBlock = async (id: string, fields: Partial<Block>) => {
-    setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...fields } : b))
-    await supabase.from('workspace_blocks').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', id)
+    const { data: { user } } = await supabase.auth.getUser()
+    setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...fields, updated_by: user?.id || b.updated_by } : b))
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('workspace_blocks').update({ ...fields, updated_at: now, updated_by: user?.id }).eq('id', id)
+    if (error) await supabase.from('workspace_blocks').update({ ...fields, updated_at: now }).eq('id', id)   // before updated_by column exists
   }
 
   const deleteBlock = async (id: string) => {
@@ -367,6 +393,7 @@ function BlockRow({ block, onUpdate, onDelete }: any) {
       style={{ display:'flex', alignItems:'flex-start', gap:8, position:'relative', borderRadius:4, padding:'2px 4px' }}
     >
       <div style={{ flex:1 }}>{content}</div>
+      {isMikha(block.created_by) ? <MBadge /> : isMikha(block.updated_by) ? <MBadge edited /> : null}
       {hovered && (
         <button
           onClick={onDelete}
