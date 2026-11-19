@@ -12,12 +12,13 @@ interface Props {
   children: React.ReactNode
   rightAction?: React.ReactNode
   maxWidth?: number
+  calm?: boolean   // no particles / grid behind the content
 }
 
-export default function ModuleLayout({ onBack, icon, title, titleColor, sub, iconBg, children, rightAction, maxWidth = 1400 }: Props) {
+export default function ModuleLayout({ onBack, icon, title, titleColor, sub, iconBg, children, rightAction, maxWidth = 1400, calm = false }: Props) {
   return (
     <>
-      <HUDBackground />
+      {!calm && <HUDBackground />}
       <div style={{
         minHeight: '100vh',
         background: 'radial-gradient(ellipse at center, #051022 0%, #020610 60%, #000 100%)',
@@ -27,11 +28,11 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
         overflow: 'hidden',
       }}>
         {/* tactical grid */}
-        <div style={{
+        {!calm && <div style={{
           position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1, opacity: 0.4,
           backgroundImage: `linear-gradient(rgba(80,180,255,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(80,180,255,0.035) 1px, transparent 1px)`,
           backgroundSize: '48px 48px',
-        }} />
+        }} />}
 
         {/* HEADER */}
         <div style={{
