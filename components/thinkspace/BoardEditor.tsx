@@ -59,7 +59,13 @@ function defaultProps(type: BType): any {
   return {}
 }
 
-export default function BoardEditor({ board, supabase, onBack }: { board: Board; supabase: any; onBack: () => void }) {
+export type EditorTables = { boards: string; blocks: string; bucket: string }
+const DEFAULT_TABLES: EditorTables = { boards: 'workspace_boards', blocks: 'workspace_blocks', bucket: BUCKET }
+
+export default function BoardEditor({ board, supabase, onBack, tables = DEFAULT_TABLES, children: headerSlot, backLabel = '← BACK', onTitle, openPrefix = 'ts-open-', topRight, suggestions, sqlFile = 'lib/sql/thinkspace_v2.sql' }: {
+  board: Board; supabase: any; onBack: () => void
+  tables?: EditorTables; children?: React.ReactNode; backLabel?: string; onTitle?: (t: string) => void; openPrefix?: string; topRight?: React.ReactNode; suggestions?: string[]; sqlFile?: string
+}) {
   const isMobile = useIsMobile()
   const [blocks, setBlocks] = useState<Block[]>([])
   const [loading, setLoading] = useState(true)
@@ -70,13 +76,13 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
   const [lightbox, setLightbox] = useState<{ paths: string[]; i: number } | null>(null)
   const [needsSql, setNeedsSql] = useState(false)
   const userIdRef = useRef<string | null>(null)
-  const openKey = `ts-open-${board.id}`
+  const openKey = `${openPrefix}${board.id}`
 
   // ─── load ───
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     userIdRef.current = user?.id || null
-    const { data } = await supabase.from('workspace_blocks').select('*').eq('board_id', board.id).order('position', { ascending: true })
+    const { data } = await supabase.from(tables.blocks).select('*').eq('board_id', board.id).order('position', { ascending: true })
     const list = ((data || []) as Block[]).map(b => ({ ...b, parent_id: b.parent_id ?? null, props: b.props || {} }))
     if (list.length && !('parent_id' in (data?.[0] || {}))) setNeedsSql(true)
     setBlocks(list)
@@ -92,7 +98,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
   async function signImages(list: Block[]) {
     const paths = list.flatMap(b => (b.type === 'image' ? (b.props?.paths || []) : b.type === 'file' ? (b.props?.files || []).map((f: any) => f.path) : [])).filter((p: string) => !urls[p])
     if (!paths.length) return
-    const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 60 * 60 * 6)
+    const { data } = await supabase.storage.from(tables.bucket).createSignedUrls(paths, 60 * 60 * 6)
     const map: Record<string, string> = {}
     for (const d of data || []) if (d.signedUrl && d.path) map[d.path] = d.signedUrl
     setUrls(prev => ({ ...prev, ...map }))
@@ -113,7 +119,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const siblings = kids(parentId)
     const position = siblings.reduce((m, b) => Math.max(m, b.position), -1) + 1
     const row: any = { board_id: board.id, type, content: '', position, created_by: userIdRef.current, parent_id: parentId, props: defaultProps(type), ...extra }
-    const { data, error } = await supabase.from('workspace_blocks').insert(row).select().single()
+    const { data, error } = await supabase.from(tables.blocks).insert(row).select().single()
     if (error) {
       if (/parent_id|props|column/i.test(error.message)) setNeedsSql(true)
       else alert('Save failed: ' + error.message)
@@ -150,9 +156,9 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const uid = userIdRef.current
     setBlocks(prev => prev.map(b => b.id === id ? { ...b, ...fields, updated_by: uid || b.updated_by } : b))
     const now = new Date().toISOString()
-    const { error } = await supabase.from('workspace_blocks').update({ ...fields, updated_at: now, updated_by: uid }).eq('id', id)
-    if (error) await supabase.from('workspace_blocks').update({ ...fields, updated_at: now }).eq('id', id)
-    await supabase.from('workspace_boards').update({ updated_at: now }).eq('id', board.id)
+    const { error } = await supabase.from(tables.blocks).update({ ...fields, updated_at: now, updated_by: uid }).eq('id', id)
+    if (error) await supabase.from(tables.blocks).update({ ...fields, updated_at: now }).eq('id', id)
+    await supabase.from(tables.boards).update({ updated_at: now }).eq('id', board.id)
   }
   async function remove(b: Block) {
     const n = countDeep(b.id)
@@ -162,8 +168,8 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     while (grew) { grew = false; for (const x of blocks) if (x.parent_id && doomed.has(x.parent_id) && !doomed.has(x.id)) { doomed.add(x.id); grew = true } }
     const paths = blocks.filter(x => doomed.has(x.id) && (x.type === 'image' || x.type === 'file')).flatMap(x => x.type === 'image' ? (x.props?.paths || []) : (x.props?.files || []).map((f: any) => f.path))
     setBlocks(prev => prev.filter(x => !doomed.has(x.id)))
-    await supabase.from('workspace_blocks').delete().eq('id', b.id)
-    if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
+    await supabase.from(tables.blocks).delete().eq('id', b.id)
+    if (paths.length) await supabase.storage.from(tables.bucket).remove(paths)
   }
   async function move(b: Block, dir: -1 | 1) {
     const sib = kids(b.parent_id)
@@ -172,8 +178,8 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const other = sib[j]
     setBlocks(prev => prev.map(x => x.id === b.id ? { ...x, position: other.position } : x.id === other.id ? { ...x, position: b.position } : x))
     await Promise.all([
-      supabase.from('workspace_blocks').update({ position: other.position }).eq('id', b.id),
-      supabase.from('workspace_blocks').update({ position: b.position }).eq('id', other.id),
+      supabase.from(tables.blocks).update({ position: other.position }).eq('id', b.id),
+      supabase.from(tables.blocks).update({ position: b.position }).eq('id', other.id),
     ])
   }
   async function uploadImages(b: Block, files: FileList | File[]) {
@@ -183,14 +189,14 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     for (const f of arr) {
       const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60)
       const path = `${board.id}/${b.id}/${Date.now()}-${safe}`
-      const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'application/octet-stream'), upsert: false })
+      const { error } = await supabase.storage.from(tables.bucket).upload(path, f, { contentType: f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : 'application/octet-stream'), upsert: false })
       if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload failed: ' + error.message); continue }
       added.push(path)
     }
     if (!added.length) return
     const paths = [...(b.props?.paths || []), ...added]
     await update(b.id, { props: { ...b.props, paths } })
-    const { data } = await supabase.storage.from(BUCKET).createSignedUrls(added, 60 * 60 * 6)
+    const { data } = await supabase.storage.from(tables.bucket).createSignedUrls(added, 60 * 60 * 6)
     const map: Record<string, string> = {}
     for (const d of data || []) if (d.signedUrl && d.path) map[d.path] = d.signedUrl
     setUrls(prev => ({ ...prev, ...map }))
@@ -203,29 +209,30 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
       if (f.size > 50 * 1024 * 1024) { alert(`${f.name} is larger than 50 MB.`); continue }
       const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80)
       const path = `${board.id}/${b.id}/${Date.now()}-${safe}`
-      const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
+      const { error } = await supabase.storage.from(tables.bucket).upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
       if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload failed: ' + error.message); continue }
       added.push({ path, name: f.name, size: f.size, type: f.type })
     }
     if (!added.length) return
     await update(b.id, { props: { ...b.props, files: [...(b.props?.files || []), ...added] } })
-    const { data } = await supabase.storage.from(BUCKET).createSignedUrls(added.map(a => a.path), 60 * 60 * 6)
+    const { data } = await supabase.storage.from(tables.bucket).createSignedUrls(added.map(a => a.path), 60 * 60 * 6)
     const map: Record<string, string> = {}
     for (const d of data || []) if (d.signedUrl && d.path) map[d.path] = d.signedUrl
     setUrls(prev => ({ ...prev, ...map }))
   }
   async function removeFile(b: Block, path: string) {
     await update(b.id, { props: { ...b.props, files: (b.props?.files || []).filter((f: any) => f.path !== path) } })
-    await supabase.storage.from(BUCKET).remove([path])
+    await supabase.storage.from(tables.bucket).remove([path])
   }
   async function removeImage(b: Block, path: string) {
     await update(b.id, { props: { ...b.props, paths: (b.props?.paths || []).filter((p: string) => p !== path) } })
-    await supabase.storage.from(BUCKET).remove([path])
+    await supabase.storage.from(tables.bucket).remove([path])
   }
   async function saveTitle() {
     if (title.trim() && title !== board.title) {
-      await supabase.from('workspace_boards').update({ title: title.trim(), updated_at: new Date().toISOString() }).eq('id', board.id)
+      await supabase.from(tables.boards).update({ title: title.trim(), updated_at: new Date().toISOString() }).eq('id', board.id)
       board.title = title.trim()
+      onTitle?.(title.trim())
     }
   }
 
@@ -363,28 +370,30 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
   return (
     <div style={{ minHeight: '100vh', background: 'radial-gradient(ellipse at 30% 0%, #0a1a3a 0%, #030914 55%, #000 100%)', color: '#d0e5ff', fontFamily: SANS }}>
       <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '12px 14px' : '14px 32px', background: 'linear-gradient(180deg, rgba(3,9,20,0.95), rgba(3,9,20,0.6))', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(80,180,255,0.1)' }}>
-        <button onClick={onBack} style={ghostBtn}>← BACK</button>
+        <button onClick={onBack} style={ghostBtn}>{backLabel}</button>
         <span style={{ fontSize: 24 }}>{board.emoji}</span>
         <input value={title} onChange={e => setTitle(e.target.value)} onBlur={saveTitle} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
           style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', fontFamily: SANS, fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#f5f9ff', padding: 0 }} />
         {mikhaCount > 0 && <MBadge count={mikhaCount} />}
         {!isMobile && <span style={{ fontFamily: MONO, fontSize: 9.5, color: DIM, letterSpacing: 1.5 }}>{blocks.length} BLOCKS</span>}
+        {topRight}
       </div>
 
       <div style={{ maxWidth: 920, margin: '0 auto', padding: isMobile ? '10px 14px 120px' : '18px 32px 160px' }}>
+        {headerSlot}
         {needsSql && (
           <div style={{ margin: '14px 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: '#ffe6a8', fontSize: 13 }}>
-            To enable sections, toggles and images, run <b>lib/sql/thinkspace_v2.sql</b> once in Supabase.
+            To enable sections, toggles and images, run <b>{sqlFile}</b> once in Supabase.
           </div>
         )}
         {loading ? <div style={{ fontFamily: MONO, fontSize: 11, color: DIM, padding: 40, textAlign: 'center' }}>Loading…</div> : (
           <>
             {top.length === 0 && (
               <div style={{ padding: '40px 0 10px' }}>
-                <div style={{ fontSize: 18, color: '#eef6ff', fontWeight: 600 }}>Empty board — where do you start?</div>
+                <div style={{ fontSize: 18, color: '#eef6ff', fontWeight: 600 }}>Empty page — where do you start?</div>
                 <div style={{ fontSize: 13, color: DIM, marginTop: 6 }}>Create sections, then collapsible entries with links, images and details.</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
-                  {SECTION_SUGGESTIONS.map(s => <button key={s} onClick={() => addSection(s)} style={suggBtn}>{s}</button>)}
+                  {(suggestions || SECTION_SUGGESTIONS).map(s => <button key={s} onClick={() => addSection(s)} style={suggBtn}>{s}</button>)}
                 </div>
               </div>
             )}

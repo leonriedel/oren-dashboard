@@ -39,7 +39,7 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
           backdropFilter: 'blur(14px)',
           background: 'linear-gradient(180deg, rgba(0,8,24,0.92) 0%, rgba(0,8,24,0.4) 100%)',
           borderBottom: '1px solid rgba(80,180,255,0.12)',
-          padding: '16px 40px',
+          padding: '16px clamp(14px, 4vw, 40px)',
         }}>
           <div style={{
             maxWidth, margin: '0 auto',
@@ -76,7 +76,7 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
             </div>
 
             {/* live status indicator */}
-            <div style={{
+            <div className="ml-live" style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '5px 12px',
               background: 'rgba(52,211,153,0.08)',
@@ -89,13 +89,14 @@ export default function ModuleLayout({ onBack, icon, title, titleColor, sub, ico
               <span>LIVE</span>
             </div>
 
-            {rightAction && <div>{rightAction}</div>}
+            {rightAction && <div style={{ flexShrink: 0 }}>{rightAction}</div>}
+            <style>{`@media (max-width: 520px) { .ml-live { display: none !important } }`}</style>
           </div>
         </div>
 
         {/* CONTENT */}
         <div style={{
-          padding: '28px 40px 60px',
+          padding: '28px clamp(14px, 4vw, 40px) 60px',
           maxWidth, margin: '0 auto',
           position: 'relative', zIndex: 5,
         }}>

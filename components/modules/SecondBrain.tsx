@@ -1,704 +1,584 @@
 'use client'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import type { User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase'
 import ModuleLayout from '@/components/ModuleLayout'
-import type { User } from '@supabase/supabase-js'
 import { useIsMobile } from '@/lib/useIsMobile'
-import { useRole } from '@/lib/useRole'
-import { TYPE_COLORS } from '@/components/secondbrain/KnowledgeGraph'
-import NotePage, { checklistProgress, type PageNote } from '@/components/secondbrain/NotePage'
-import ProcessInbox from '@/components/secondbrain/ProcessInbox'
-import TopicsBoard, { type TopicView } from '@/components/secondbrain/TopicsBoard'
+import BoardEditor, { type EditorTables } from '@/components/thinkspace/BoardEditor'
 
 const KnowledgeGraph = dynamic(() => import('@/components/secondbrain/KnowledgeGraph'), { ssr: false })
 const OrenCoreGL = dynamic(() => import('@/components/OrenCoreGL'), { ssr: false })
 
 /**
- * SECONDBRAIN v5 · MIND
- * Talk to your second brain. OREN files, answers or thinks along — and the
- * neural map reacts live. Today strip on top, library + note pages one click away.
+ * SECONDBRAIN v7 · simple & yours
+ * This week (weekly goals + today's priorities) → pages with sub-pages (Notion-style editor, private) →
+ * the brain orb opens your page network.
  */
 
-interface Props { user: User; onBack: () => void }
-
-type Status = 'inbox' | 'active' | 'reference' | 'done' | 'archived'
-type Note = {
-  id: string; type: string; title: string; body: string | null; url: string | null; summary: string | null
-  tags: string[]; related: string[]; pinned: boolean; created_at: string
-  status: Status; project: string | null; due: string | null; next_action: string | null; suggestion: string | null; seen_at: string | null; board_day?: string | null
+type Page = {
+  id: string; parent_id: string | null; title: string; emoji: string; color: string
+  priority: number | null; status: string; pinned: boolean; position: number; updated_at: string; created_at: string
 }
-type Msg = { id: string; role: 'me' | 'oren'; content: string; intent?: string | null; note_id?: string | null; cited?: string[] | null; created_at: string; pending?: boolean }
-type Prio = { id: string; text: string; done: boolean; sort_order: number | null; created_at: string }
-type Habit = { id: string; emoji: string; label: string; sort_order: number }
-type Plan = { reply: string; focus: string[]; tasks: { topic: string; text: string }[]; at?: string }
-type DayRow = { day: string; nn_done: string[] | null; focus_topics?: string[] | null; plan?: Plan | null }
-type TopicRow = { id: string; name: string; priority: number; status: string }
-type Briefing = { focus?: string; briefing?: string }
+type Goal = { id: string; text: string; done: boolean; page_id?: string | null }
+type Prio = { id: string; text: string; done: boolean; sort_order?: number }
 
+const TABLES: EditorTables = { boards: 'brain_pages', blocks: 'brain_blocks', bucket: 'brain' }
 const MONO = 'Space Mono, monospace'
-const BLUE = '#80c0ff', GOLD = '#fbbf24', MINT = '#34d399'
-const DIM = 'rgba(120,180,230,0.5)'
-const TYPES = ['idea', 'note', 'link', 'task', 'goal', 'person', 'quote']
-const TYPE_ICON: Record<string, string> = { idea: '✦', note: '▤', link: '↗', task: '◉', goal: '◎', person: '☺', quote: '❝' }
-const INTENT: Record<string, { label: string; color: string }> = {
-  plan: { label: 'DAY PLAN', color: GOLD }, capture: { label: 'FILED', color: GOLD }, ask: { label: 'FROM YOUR BRAIN', color: MINT }, reflect: { label: 'THINKING WITH YOU', color: '#b47cff' },
-}
-const DEFAULT_NN = [
-  { emoji: '💪', label: 'SPORT' }, { emoji: '🧘', label: 'MEDITATION' }, { emoji: '📧', label: 'MAILS' },
-  { emoji: '🤖', label: 'AI DEV' }, { emoji: '⚡', label: 'OREN' },
+const SANS = 'DM Sans, Inter, system-ui, sans-serif'
+const BLUE = '#64c8ff', MINT = '#34d399', DIM = 'rgba(140,185,230,0.5)'
+const PRIO: Record<number, { label: string; color: string }> = { 1: { label: 'P1', color: '#ff6b6b' }, 2: { label: 'P2', color: '#fbbf24' }, 3: { label: 'P3', color: '#64c8ff' } }
+const STATUS: { key: string; label: string; color: string }[] = [
+  { key: 'active', label: 'ACTIVE', color: MINT },
+  { key: 'someday', label: 'SOMEDAY', color: '#b47cff' },
+  { key: 'done', label: 'DONE', color: 'rgba(160,200,240,0.6)' },
+  { key: 'archived', label: 'ARCHIVED', color: 'rgba(140,160,190,0.45)' },
 ]
-const PROMPTS = [
-  'Was beschäftigt dich gerade?',
-  'Idee: …',
-  'Was hatte ich für Edgar geplant?',
-  'Ich hänge bei … fest',
+const FILTERS = [
+  { key: 'open', label: 'ALL OPEN' }, { key: 'p1', label: 'P1' }, { key: 'active', label: 'ACTIVE' },
+  { key: 'someday', label: 'SOMEDAY' }, { key: 'done', label: 'DONE' }, { key: 'archived', label: 'ARCHIVE' },
 ]
+const COLORS = ['#80c0ff', '#34d399', '#fbbf24', '#f97316', '#a78bfa', '#ff6b6b', '#38bdf8', '#ff6fae']
+const EMOJIS = ['📄', '🎯', '🚀', '🧠', '💡', '🏝', '🏡', '🎨', '🤖', '💰', '📈', '🏋️', '✍️', '📚', '🌱', '🛠', '❤️', '✈️']
+const PAGE_SUGGESTIONS = ['🎯 Goals', '💡 Ideas', '✅ Next steps', '📚 Research', '📝 Notes', '🤝 People']
 
-const HUES = ['#64c8ff', '#ffd73c', '#34d399', '#b47cff', '#ff9f43', '#ff6fae', '#7ef0e0', '#a3e635']
-const hash = (x: string) => { let h = 2166136261; for (let i = 0; i < x.length; i++) { h ^= x.charCodeAt(i); h = Math.imul(h, 16777619) } return h >>> 0 }
-const topicColor = (n: string) => HUES[hash(n.toLowerCase()) % HUES.length]
-const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
-const timeOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-const ago = (iso: string) => {
-  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
-  if (m < 1) return 'now'; if (m < 60) return `${m}m`; const h = Math.round(m / 60); if (h < 24) return `${h}h`
-  const d = Math.round(h / 24); return d < 30 ? `${d}d` : new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+function weekStart(d = new Date()): string {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7))
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
 }
+function isoWeek(d = new Date()): number {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const day = t.getUTCDay() || 7
+  t.setUTCDate(t.getUTCDate() + 4 - day)
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1))
+  return Math.ceil(((t.getTime() - y0.getTime()) / 86400000 + 1) / 7)
+}
+function weekRange(): string {
+  const s = new Date(weekStart() + 'T00:00:00'), e = new Date(s); e.setDate(s.getDate() + 6)
+  const f = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return `${f(s)} – ${f(e)}`
+}
+function ago(iso: string): string {
+  const m = Math.max(0, (Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 60) return `${Math.round(m)}m ago`
+  if (m < 1440) return `${Math.round(m / 60)}h ago`
+  return `${Math.round(m / 1440)}d ago`
+}
+const uid = () => Math.random().toString(36).slice(2, 10)
 
-export default function SecondBrain({ user, onBack }: Props) {
+export default function SecondBrain({ user, onBack }: { user: User; onBack: () => void }) {
   const isMobile = useIsMobile()
-  const { role, name } = useRole()
-  const isAdmin = role === 'admin'
   const supabase = useMemo(() => createClient(), [])
-  const today = dayKey(new Date())
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const streamRef = useRef<HTMLDivElement>(null)
-  const recRef = useRef<any>(null)
-
-  const [notes, setNotes] = useState<Note[]>([])
-  const [msgs, setMsgs] = useState<Msg[]>([])
+  const [pages, setPages] = useState<Page[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [mindReady, setMindReady] = useState(true)
-  const [input, setInput] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [listening, setListening] = useState(false)
-  const [burstId, setBurstId] = useState<string | null>(null)
-  const [glow, setGlow] = useState<Set<string> | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [processing, setProcessing] = useState(false)
-  const [library, setLibrary] = useState(false)
-  const [heroH, setHeroH] = useState(720)
-
+  const [needsSql, setNeedsSql] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [goals, setGoals] = useState<Goal[]>([])
   const [prios, setPrios] = useState<Prio[]>([])
-  const [habits, setHabits] = useState<Habit[]>([])
-  const [days, setDays] = useState<Record<string, DayRow>>({})
-  const [briefing, setBriefing] = useState<Briefing | null>(null)
-  const [topicRows, setTopicRows] = useState<TopicRow[]>([])
-  const [planning, setPlanning] = useState(false)
+  const [filter, setFilter] = useState('open')
+  const [q, setQ] = useState('')
+  const [showNew, setShowNew] = useState(false)
   const [brainOpen, setBrainOpen] = useState(false)
-  const [winH, setWinH] = useState(900)
+  const [oldCount, setOldCount] = useState(0)
+  const [importing, setImporting] = useState(false)
+  const [winH, setWinH] = useState(800)
+  const week = weekStart()
 
   useEffect(() => {
-    const fit = () => { setHeroH(Math.max(520, window.innerHeight - 400)); setWinH(window.innerHeight) }
-    fit(); window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    const f = () => setWinH(window.innerHeight)
+    f(); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f)
   }, [])
-  useEffect(() => { loadAll() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  useEffect(() => { if (isAdmin) loadBriefing() // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin])
-  useEffect(() => { streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight, behavior: 'smooth' }) }, [msgs.length, busy])
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); inputRef.current?.focus() }
-      if (e.key === 'Escape') setBrainOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  useEffect(() => { try { const v = localStorage.getItem('sb7-filter'); if (v) setFilter(v) } catch { /* noop */ } }, [])
+  useEffect(() => { try { localStorage.setItem('sb7-filter', filter) } catch { /* noop */ } }, [filter])
 
-  async function token() {
-    const { data } = await supabase.auth.getSession()
-    return data?.session?.access_token
-  }
-
-  async function loadAll() {
-    const since = dayKey(addDays(new Date(), -60))
-    const t = await token()
-    const [n, p, h, d, m, tp] = await Promise.all([
-      supabase.from('brain_notes').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(800),
-      supabase.from('priorities').select('*').eq('user_id', user.id).order('sort_order', { ascending: true }).order('created_at'),
-      supabase.from('non_negotiables').select('*').eq('user_id', user.id).order('sort_order'),
-      supabase.from('brain_days').select('*').eq('user_id', user.id).gte('day', since),
-      fetch('/api/brain/mind', { headers: t ? { Authorization: `Bearer ${t}` } : {} }).then(r => r.json()).catch(() => ({ messages: [] })),
-      supabase.from('brain_topics').select('*').eq('user_id', user.id),
+  // ─── load ───
+  const load = useCallback(async () => {
+    const [pg, wk, pr] = await Promise.all([
+      supabase.from('brain_pages').select('*').order('position').order('created_at'),
+      supabase.from('brain_weeks').select('goals').eq('week_start', week).maybeSingle(),
+      supabase.from('priorities').select('id,text,done,sort_order').eq('user_id', user.id).eq('done', false).order('sort_order').order('created_at'),
     ])
-    setTopicRows((tp.data as TopicRow[]) || [])
-    setNotes(((n.data as Note[]) || []).map(x => ({ ...x, tags: x.tags || [], related: x.related || [], status: (x.status || 'active') as Status })))
-    setPrios((p.data as Prio[]) || [])
-    if (!h.data?.length) {
-      const { data } = await supabase.from('non_negotiables').insert(DEFAULT_NN.map((x, i) => ({ ...x, done: false, sort_order: i, user_id: user.id }))).select()
-      setHabits((data as Habit[]) || [])
-    } else setHabits(h.data as Habit[])
-    const map: Record<string, DayRow> = {}; for (const r of (d.data as DayRow[]) || []) map[r.day] = r
-    setDays(map)
-    setMsgs((m.messages as Msg[]) || [])
-    if (m.error && /brain_mind/.test(m.error)) setMindReady(false)
+    if (pg.error) { setNeedsSql(/relation|does not exist|schema cache/i.test(pg.error.message)); setLoaded(true); return }
+    setNeedsSql(false)
+    setPages((pg.data || []) as Page[])
+    setGoals(((wk.data as any)?.goals || []) as Goal[])
+    setPrios((pr.data || []) as Prio[])
     setLoaded(true)
-  }
-
-  async function loadBriefing() {
-    try {
-      const t = await token()
-      const r = await fetch('/api/brain/briefing', {
-        method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
-        body: JSON.stringify({ day: today, localTime: new Date().toLocaleString('en-GB', { weekday: 'long', hour: '2-digit', minute: '2-digit' }), force: false }),
-      })
-      const j = await r.json(); if (j.briefing) setBriefing(j.briefing)
-    } catch { /* noop */ }
-  }
-
-  // ─── talk ───
-  const send = useCallback(async (override?: string) => {
-    const text = (override ?? input).trim(); if (!text || busy) return
-    const tmp: Msg = { id: 'tmp-' + Date.now(), role: 'me', content: text, created_at: new Date().toISOString(), pending: true }
-    setMsgs(prev => [...prev, tmp]); setInput(''); setBusy(true)
-    try {
-      const t = await token()
-      const j = await (await fetch('/api/brain/mind', {
-        method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
-        body: JSON.stringify({ text, today }),
-      })).json()
-      if (j.error) {
-        setMsgs(prev => [...prev.filter(x => x.id !== tmp.id), { ...tmp, pending: false }, { id: 'err-' + Date.now(), role: 'oren', content: /brain_mind/.test(j.error) ? 'Mir fehlt noch meine Gesprächs-Tabelle — bitte lib/sql/brain_mind.sql in Supabase ausführen.' : `Da ging was schief: ${j.error}`, created_at: new Date().toISOString() }])
-        return
-      }
-      setMsgs(prev => [...prev.filter(x => x.id !== tmp.id), j.me, j.oren].filter(Boolean))
-      if (j.note) {
-        const note: Note = { ...j.note, tags: j.note.tags || [], related: j.note.related || [], status: j.note.status || 'inbox' }
-        setNotes(prev => [note, ...prev.map(n => note.related.includes(n.id) ? { ...n, related: Array.from(new Set([...n.related, note.id])) } : n)])
-        setBurstId(note.id)
-      }
-      const cited: string[] = j.oren?.cited || []
-      if (cited.length || j.note) { setGlow(new Set([...cited, ...(j.note ? [j.note.id] : [])])); setTimeout(() => setGlow(null), 9000) }
-    } catch (e) {
-      setMsgs(prev => [...prev.filter(x => x.id !== tmp.id), { ...tmp, pending: false }])
-    } finally { setBusy(false); inputRef.current?.focus() }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [input, busy, today])
-
-  function toggleVoice() {
-    if (listening) { recRef.current?.stop(); return }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
-    const rec = new SR()
-    rec.lang = 'de-DE'; rec.interimResults = true; rec.continuous = true
-    let finalText = ''
-    rec.onresult = (e: any) => {
-      let interim = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i]; if (r.isFinal) finalText += r[0].transcript + ' '; else interim += r[0].transcript
-      }
-      setInput((finalText + interim).trim())
+    if (!(pg.data || []).length) {
+      let r: any = await supabase.from('brain_notes').select('id', { count: 'exact', head: true }).neq('status', 'archived')
+      if (r.error) r = await supabase.from('brain_notes').select('id', { count: 'exact', head: true })
+      setOldCount(r.count || 0)
     }
-    rec.onerror = () => setListening(false)
-    rec.onend = () => { setListening(false); if (finalText.trim()) send(finalText.trim()) }
-    recRef.current = rec; setListening(true); setInput(''); rec.start()
-  }
+  }, [supabase, user.id, week])
+  useEffect(() => { load() }, [load])
 
-  // ─── note / today mutations ───
-  async function patchNote(id: string, patch: Partial<Note>) {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...patch } : n))
-    await supabase.from('brain_notes').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
+  // ─── tree helpers ───
+  const byId = useMemo(() => new Map(pages.map(p => [p.id, p])), [pages])
+  const childrenOf = useCallback((id: string | null) => pages.filter(p => p.parent_id === id), [pages])
+  const countDeep = useCallback((id: string): number => childrenOf(id).reduce((n, c) => n + 1 + countDeep(c.id), 0), [childrenOf])
+  const rootOf = useCallback((p: Page): Page => { let r = p; let g = 0; while (r.parent_id && byId.get(r.parent_id) && g++ < 50) r = byId.get(r.parent_id)!; return r }, [byId])
+  const trail = useCallback((p: Page): Page[] => { const out: Page[] = []; let r: Page | undefined = p; let g = 0; while (r && g++ < 50) { out.unshift(r); r = r.parent_id ? byId.get(r.parent_id) : undefined } return out }, [byId])
+
+  // ─── page mutations ───
+  async function createPage(fields: Partial<Page>, open = true): Promise<Page | null> {
+    const siblings = childrenOf(fields.parent_id ?? null)
+    const row = { title: 'Untitled', emoji: '📄', color: '#80c0ff', status: 'active', position: siblings.length, ...fields }
+    const { data, error } = await supabase.from('brain_pages').insert(row).select().single()
+    if (error) { if (/relation|does not exist/i.test(error.message)) setNeedsSql(true); else alert('Create failed: ' + error.message); return null }
+    setPages(prev => [...prev, data as Page])
+    if (open) setOpenId((data as Page).id)
+    return data as Page
   }
-  async function deleteNote(id: string) {
-    setNotes(prev => prev.filter(x => x.id !== id).map(x => ({ ...x, related: x.related.filter(r => r !== id) })))
-    setSelectedId(null)
-    await supabase.from('brain_notes').delete().eq('id', id)
+  async function patchPage(id: string, fields: Partial<Page>) {
+    const now = new Date().toISOString()
+    setPages(prev => prev.map(p => p.id === id ? { ...p, ...fields, updated_at: now } : p))
+    await supabase.from('brain_pages').update({ ...fields, updated_at: now }).eq('id', id)
   }
-  async function sendToToday(n: { id: string; title: string; next_action: string | null }) {
-    const text = n.next_action || n.title
-    const { data } = await supabase.from('priorities').insert({ user_id: user.id, text, done: false, sort_order: prios.filter(p => !p.done).length }).select().single()
+  async function deletePage(p: Page) {
+    const n = countDeep(p.id)
+    if (!confirm(`Delete "${p.title}"${n ? ` and ${n} sub-page${n === 1 ? '' : 's'}` : ''}? This cannot be undone.`)) return
+    const doomed = new Set([p.id]); let grew = true
+    while (grew) { grew = false; for (const x of pages) if (x.parent_id && doomed.has(x.parent_id) && !doomed.has(x.id)) { doomed.add(x.id); grew = true } }
+    setPages(prev => prev.filter(x => !doomed.has(x.id)))
+    if (openId && doomed.has(openId)) setOpenId(p.parent_id)
+    await supabase.from('brain_pages').delete().eq('id', p.id)
+  }
+  const cyclePrio = (p: Page) => patchPage(p.id, { priority: p.priority === 1 ? 2 : p.priority === 2 ? 3 : p.priority === 3 ? null : 1 })
+
+  // ─── weekly goals ───
+  async function saveGoals(next: Goal[]) {
+    setGoals(next)
+    const { error } = await supabase.from('brain_weeks').upsert({ user_id: user.id, week_start: week, goals: next, updated_at: new Date().toISOString() })
+    if (error && /relation|does not exist/i.test(error.message)) setNeedsSql(true)
+  }
+  const addGoal = (text: string, page_id: string | null = null) => text.trim() && saveGoals([...goals, { id: uid(), text: text.trim(), done: false, page_id }])
+
+  // ─── today's priorities ───
+  async function addPrio(text: string) {
+    if (!text.trim()) return
+    const { data } = await supabase.from('priorities').insert({ user_id: user.id, text: text.trim(), done: false, sort_order: prios.length }).select('id,text,done,sort_order').single()
     if (data) setPrios(prev => [...prev, data as Prio])
-    await patchNote(n.id, { status: 'active' })
-  }
-  const todayDone = days[today]?.nn_done || []
-  async function toggleHabit(id: string) {
-    const next = todayDone.includes(id) ? todayDone.filter(x => x !== id) : [...todayDone, id]
-    setDays(prev => ({ ...prev, [today]: { day: today, nn_done: next } }))
-    await supabase.from('brain_days').upsert({ user_id: user.id, day: today, nn_done: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
   }
   async function togglePrio(p: Prio) {
-    setPrios(prev => prev.map(x => x.id === p.id ? { ...x, done: !p.done } : x))
+    setPrios(prev => prev.map(x => x.id === p.id ? { ...x, done: !x.done } : x))
     await supabase.from('priorities').update({ done: !p.done }).eq('id', p.id)
   }
+  async function removePrio(p: Prio) {
+    setPrios(prev => prev.filter(x => x.id !== p.id))
+    await supabase.from('priorities').delete().eq('id', p.id)
+  }
 
-  // ─── topics ───
-  async function upsertTopic(name: string, patch: Partial<TopicRow>) {
-    const ex = topicRows.find(t => t.name === name)
-    const row = { name, priority: ex?.priority ?? 2, status: ex?.status ?? 'active', ...patch }
-    setTopicRows(prev => ex ? prev.map(t => t.name === name ? { ...t, ...row } : t) : [...prev, { id: 'tmp-' + name, ...row } as TopicRow])
-    await supabase.from('brain_topics').upsert({ user_id: user.id, ...row }, { onConflict: 'user_id,name' })
-  }
-  const cyclePrio = (name: string) => { const cur = topicRows.find(t => t.name === name)?.priority ?? 2; upsertTopic(name, { priority: cur === 1 ? 3 : cur === 2 ? 1 : 2 }) }
-  const togglePause = (name: string) => { const cur = topicRows.find(t => t.name === name)?.status ?? 'active'; upsertTopic(name, { status: cur === 'paused' ? 'active' : 'paused' }) }
-  const focusList: string[] = days[today]?.focus_topics || []
-  async function setFocus(next: string[]) {
-    setDays(prev => ({ ...prev, [today]: { ...(prev[today] || { day: today, nn_done: [] }), focus_topics: next } }))
-    await supabase.from('brain_days').upsert({ user_id: user.id, day: today, focus_topics: next, updated_at: new Date().toISOString() }, { onConflict: 'user_id,day' })
-  }
-  const toggleFocus = (name: string) => setFocus(focusList.includes(name) ? focusList.filter(x => x !== name) : [...focusList, name])
-
-  function boardTemplate(topic: string, plan: Plan | null | undefined) {
-    const planned = (plan?.tasks || []).filter(t => t.topic === topic).map(t => t.text)
-    const open = notes.filter(n => n.project === topic && (n.type === 'task' || n.type === 'goal') && n.status !== 'done' && n.status !== 'archived').map(n => n.next_action || n.title)
-    const tasks = Array.from(new Set([...planned, ...open])).slice(0, 7)
-    return `## Focus\n${planned.length ? 'Plan von OREN für heute.' : ''}\n\n## Today\n${(tasks.length ? tasks : ['']).map(t => `- [ ] ${t}`).join('\n')}\n\n## Notes\n\n## Outcome\n`
-  }
-  async function ensureBoard(topic: string, plan?: Plan | null): Promise<string | null> {
-    const ex = notes.find(n => n.project === topic && n.board_day === today && n.status !== 'archived')
-    if (ex) return ex.id
-    const title = `${topic} · ${new Date().toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}`
-    const { data } = await supabase.from('brain_notes').insert({
-      user_id: user.id, type: 'note', title, body: boardTemplate(topic, plan ?? days[today]?.plan), project: topic, tags: ['daily'], status: 'active', board_day: today, related: [],
-    }).select().single()
-    if (!data) return null
-    const note = { ...(data as Note), tags: (data as Note).tags || [], related: (data as Note).related || [] }
-    setNotes(prev => [note, ...prev])
-    return note.id
-  }
-  async function openBoard(topic: string) { const id = await ensureBoard(topic); if (id) setSelectedId(id) }
-
-  async function planDay() {
-    if (planning) return
-    setPlanning(true); setBusy(true)
-    try {
-      const t = await token()
-      const context = {
-        topics: topicViews.filter(v => v.status !== 'paused').slice(0, 15).map(v => ({
-          name: v.name, priority: `P${v.priority}`, heat: v.heat, overdue: v.overdue, dueToday: v.dueToday, next: v.next,
-          open: v.open.slice(0, 6).map(o => ({ task: o.next_action || o.title, due: o.due })),
-        })),
-        priorities: prios.filter(p => !p.done).map(p => p.text),
+  // ─── import old SecondBrain notes ───
+  async function importOld() {
+    setImporting(true)
+    let res: any = await supabase.from('brain_notes').select('id,type,title,body,summary,url,tags,project').neq('status', 'archived').order('created_at')
+    if (res.error) res = await supabase.from('brain_notes').select('id,type,title,body,summary,url,tags').order('created_at')
+    const notes = (res.data || []) as any[]
+    const root = await createPage({ title: 'Old SecondBrain', emoji: '🗄', color: '#a78bfa', status: 'someday' }, false)
+    if (!root) { setImporting(false); return }
+    const icon: Record<string, string> = { idea: '💡', goal: '🎯', task: '✅', link: '🔗', person: '🤝', quote: '💬', note: '📝' }
+    const groups = new Map<string, Page>()
+    for (const n of notes) {
+      const g = (n.project || '').trim()
+      let parent = root
+      if (g) {
+        if (!groups.has(g)) { const gp = await createPage({ title: g, emoji: '📁', parent_id: root.id }, false); if (gp) groups.set(g, gp) }
+        parent = groups.get(g) || root
       }
-      const j = await (await fetch('/api/brain/mind', {
-        method: 'POST', headers: { 'content-type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) },
-        body: JSON.stringify({ mode: 'plan', today, context }),
-      })).json()
-      if (j.error) { setMsgs(prev => [...prev, { id: 'err-' + Date.now(), role: 'oren', content: /brain_days|focus_topics|plan/.test(j.error) ? 'Für die Tagesplanung fehlen noch Spalten — bitte lib/sql/brain_v6.sql in Supabase ausführen.' : `Planung fehlgeschlagen: ${j.error}`, created_at: new Date().toISOString() }]); return }
-      setMsgs(prev => [...prev, j.me, j.oren].filter(Boolean))
-      if (j.plan) {
-        const plan = j.plan as Plan
-        setDays(prev => ({ ...prev, [today]: { ...(prev[today] || { day: today, nn_done: [] }), focus_topics: plan.focus, plan } }))
-        for (const topic of plan.focus) await ensureBoard(topic, plan)
-      }
-    } finally { setPlanning(false); setBusy(false) }
+      const pg = await createPage({ title: (n.title || 'Note').slice(0, 120), emoji: icon[n.type] || '📝', parent_id: parent.id }, false)
+      if (!pg) continue
+      const blocks: any[] = []
+      const text = [n.body, n.body ? '' : n.summary].filter(Boolean).join('\n')
+      if (text) blocks.push({ board_id: pg.id, type: 'text', content: text, position: 0, props: {} })
+      if (n.url) blocks.push({ board_id: pg.id, type: 'link', content: '', position: 1, props: { url: n.url } })
+      if (n.tags?.length) blocks.push({ board_id: pg.id, type: 'text', content: n.tags.map((t: string) => '#' + t).join(' '), position: 2, props: {} })
+      if (blocks.length) await supabase.from('brain_blocks').insert(blocks)
+    }
+    setImporting(false); setOldCount(0)
+    load()
   }
 
-  // ─── derived ───
-  const live = useMemo(() => notes.filter(n => n.status !== 'archived'), [notes])
-  const topicViews: TopicView[] = useMemo(() => {
-    const names = Array.from(new Set([...topicRows.map(t => t.name), ...(live.map(n => n.project).filter(Boolean) as string[])]))
-    const soon = dayKey(addDays(new Date(), 3)), cutoff = new Date(Date.now() - 48 * 3600000).toISOString()
-    const todayText = msgs.filter(m => m.role === 'me' && m.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10)).map(m => m.content.toLowerCase()).join(' ')
-    const views = names.map(name => {
-      const row = topicRows.find(t => t.name === name)
-      const items = live.filter(n => n.project === name && !n.board_day)
-      const open = items.filter(n => (n.type === 'task' || n.type === 'goal') && n.status !== 'done').sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999'))
-      const overdue = open.filter(n => n.due && n.due < today).length
-      const dueToday = open.filter(n => n.due === today).length
-      const dueSoon = open.filter(n => n.due && n.due <= soon).length
-      const recent = items.filter(n => n.created_at > cutoff).length
-      const mentions = todayText ? todayText.split(name.toLowerCase()).length - 1 : 0
-      const priority = row?.priority ?? 2
-      const status = row?.status ?? 'active'
-      const focus = focusList.includes(name)
-      const heat = status === 'paused' ? 0 : (focus ? 60 : 0) + ({ 1: 35, 2: 15, 3: 0 } as Record<number, number>)[priority] + overdue * 14 + dueToday * 12 + dueSoon * 5 + Math.min(open.length, 6) * 3 + Math.min(recent, 5) * 4 + Math.min(mentions, 3) * 5
-      const boardNote = live.find(n => n.project === name && n.board_day === today)
-      const bp = boardNote ? checklistProgress(boardNote.body) : null
-      const last = items.reduce<string | null>((a, n) => (!a || n.created_at > a ? n.created_at : a), null)
-      const next = open[0] ? (open[0].next_action || open[0].title) : (items.find(n => n.next_action)?.next_action || null)
-      return {
-        name, priority, status, heat, focus, color: topicColor(name), overdue, dueToday, total: items.length, last, next,
-        open: open.map(o => ({ id: o.id, type: o.type, title: o.title, status: o.status, due: o.due, next_action: o.next_action })),
-        board: boardNote ? { id: boardNote.id, done: bp!.done, total: bp!.total } : null,
-      } as TopicView
-    })
-    return views.sort((a, b) => b.heat - a.heat || a.name.localeCompare(b.name))
+  // ─── views ───
+  const openPage = openId ? byId.get(openId) : null
+  const sortPages = (list: Page[]) => [...list].sort((a, b) =>
+    (Number(b.pinned) - Number(a.pinned)) || ((a.priority ?? 9) - (b.priority ?? 9)) || (+new Date(b.updated_at) - +new Date(a.updated_at)))
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (needle) return sortPages(pages.filter(p => p.title.toLowerCase().includes(needle)))
+    const roots = pages.filter(p => !p.parent_id)
+    const f = roots.filter(p =>
+      filter === 'open' ? (p.status === 'active' || p.status === 'someday') :
+      filter === 'p1' ? p.priority === 1 && p.status !== 'archived' && p.status !== 'done' :
+      p.status === filter)
+    return sortPages(f)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topicRows, live, msgs, focusList.join('|'), today])
-  const maxHeat = Math.max(1, ...topicViews.map(t => t.heat))
-  const inbox = useMemo(() => notes.filter(n => n.status === 'inbox').sort((a, b) => a.created_at.localeCompare(b.created_at)), [notes])
-  const projectNames = useMemo(() => Array.from(new Set([...topicRows.map(t => t.name), ...(live.map(n => n.project).filter(Boolean) as string[])])), [live, topicRows])
-  const graphNotes = useMemo(() => live.filter(n => !n.board_day).map(n => ({ id: n.id, type: n.type, title: n.title, tags: n.tags, related: n.related, pinned: n.pinned })), [live])
-  const tagCount = useMemo(() => new Set(live.flatMap(n => n.tags)).size, [live])
-  const openPrios = prios.filter(p => !p.done)
-  const dueSoon = useMemo(() => live.filter(n => n.due && n.status !== 'done' && n.due <= dayKey(addDays(new Date(), 1))).length, [live])
-  const selected = notes.find(n => n.id === selectedId) || null
-  const firstName = (name || 'Leon').split(/[ .]/)[0].replace(/^./, c => c.toUpperCase())
-  const hour = new Date().getHours()
-  const greeting = hour < 11 ? 'Guten Morgen' : hour < 17 ? 'Hey' : 'Guten Abend'
-  const todaysMsgs = msgs.filter(m => m.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10))
+  }, [pages, q, filter])
 
+  const graphNotes = useMemo(() => pages.filter(p => p.status !== 'archived').map(p => {
+    const r = rootOf(p)
+    const type = p.status === 'done' ? 'task' : p.status === 'someday' ? 'link' : p.priority === 1 ? 'goal' : p.priority === 2 ? 'idea' : 'note'
+    const parent = p.parent_id ? byId.get(p.parent_id) : undefined
+    return { id: p.id, type, title: `${p.emoji} ${p.title}`, tags: [r.title], related: parent && parent.parent_id ? [parent.id] : [], pinned: p.pinned }
+  }), [pages, rootOf, byId])
+  const rootCount = pages.filter(p => !p.parent_id).length
+
+  // ═══ PAGE VIEW ═══
+  if (openPage) {
+    const parent = openPage.parent_id ? byId.get(openPage.parent_id) : undefined
+    const subs = sortPages(childrenOf(openPage.id))
+    const inWeek = goals.some(g => g.page_id === openPage.id)
+    return (
+      <BoardEditor
+        key={openPage.id}
+        board={openPage}
+        supabase={supabase}
+        tables={TABLES}
+        openPrefix="sb7-open-"
+        sqlFile="lib/sql/brain_v7.sql"
+        suggestions={PAGE_SUGGESTIONS}
+        backLabel={parent ? `← ${parent.emoji} ${parent.title.slice(0, 18)}` : '← SECONDBRAIN'}
+        onBack={() => setOpenId(parent ? parent.id : null)}
+        onTitle={t => setPages(prev => prev.map(p => p.id === openPage.id ? { ...p, title: t } : p))}
+        topRight={<PageControls page={openPage} isMobile={isMobile} inWeek={inWeek}
+          onPrio={() => cyclePrio(openPage)} onPatch={f => patchPage(openPage.id, f)} onDelete={() => deletePage(openPage)}
+          onWeek={() => inWeek ? saveGoals(goals.filter(g => g.page_id !== openPage.id)) : addGoal(openPage.title, openPage.id)} />}
+      >
+        <div style={{ padding: '16px 0 6px' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, color: DIM }}>
+            <button onClick={() => setOpenId(null)} style={crumbBtn}>🧠 SECONDBRAIN</button>
+            {trail(openPage).map(p => (
+              <React.Fragment key={p.id}><span>/</span>
+                <button onClick={() => setOpenId(p.id)} style={{ ...crumbBtn, color: p.id === openPage.id ? '#eaf4ff' : DIM }}>{p.emoji} {p.title.toUpperCase().slice(0, 28)}</button>
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 150 : 190}px, 1fr))`, gap: 10 }}>
+            {subs.map(s => <SubTile key={s.id} page={s} count={countDeep(s.id)} onOpen={() => setOpenId(s.id)} />)}
+            <button onClick={() => createPage({ parent_id: openPage.id, color: openPage.color })} style={{
+              minHeight: 64, borderRadius: 12, cursor: 'pointer', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5,
+              color: 'rgba(160,205,250,0.75)', background: 'rgba(80,180,255,0.04)', border: '1px dashed rgba(120,190,255,0.28)',
+            }}>+ SUB-PAGE</button>
+          </div>
+          <div style={{ height: 1, margin: '18px 0 0', background: `linear-gradient(90deg, ${openPage.color}66, transparent 80%)` }} />
+        </div>
+      </BoardEditor>
+    )
+  }
+
+  // ═══ HOME ═══
   return (
-    <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor={BLUE} sub="Talk · Think · Remember" maxWidth={1680}
-      iconBg="linear-gradient(135deg, rgba(60,120,200,0.4), rgba(100,180,255,0.2))"
-      rightAction={<button onClick={() => setLibrary(true)} style={topBtn}>▤ LIBRARY · {live.length}</button>}>
-
-      {/* ═══ TODAY STRIP ═══ */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 22, flexWrap: isMobile ? 'wrap' : 'nowrap', marginBottom: 14,
-        padding: isMobile ? '12px 14px' : '12px 20px', borderRadius: 16, background: 'linear-gradient(90deg, rgba(10,26,58,0.62), rgba(6,16,38,0.45))',
-        border: '1px solid rgba(80,180,255,0.12)', backdropFilter: 'blur(14px)',
-      }}>
-        <div style={{ flexShrink: 0 }}>
-          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: DIM }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'short' }).toUpperCase()}</div>
-          <div style={{ fontSize: 15, color: '#eef6ff', fontWeight: 600, marginTop: 2 }}>{greeting}, {firstName}</div>
-        </div>
-        {isAdmin && briefing?.focus && (
-          <div style={{ flex: 1, minWidth: isMobile ? '100%' : 0, borderLeft: isMobile ? 'none' : '1px solid rgba(80,180,255,0.12)', paddingLeft: isMobile ? 0 : 20 }}>
-            <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 2, color: MINT }}>● FOCUS</div>
-            <div style={{ fontSize: 13.5, color: '#e6f2ff', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{briefing.focus}</div>
+    <ModuleLayout onBack={onBack} icon="🧠" title="SECONDBRAIN" titleColor={BLUE} sub="Pages · Weekly goals · Priorities" iconBg="rgba(100,200,255,0.12)" maxWidth={1320}
+      rightAction={<button onClick={() => setShowNew(true)} style={primaryBtn}>{isMobile ? '+' : '+ NEW PAGE'}</button>}>
+      <div style={{ padding: isMobile ? '0 0 40px' : '10px 0 40px', minWidth: 0 }}>
+        {needsSql && (
+          <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 12, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: '#ffe6a8', fontSize: 13.5 }}>
+            One-time setup: run <b>lib/sql/brain_v7.sql</b> in the Supabase SQL editor, then reload.
           </div>
         )}
-        <div style={{ display: 'flex', gap: 8, flex: isAdmin && briefing?.focus ? 'none' : 1, minWidth: 0, overflow: 'hidden' }}>
-          {openPrios.slice(0, 3).map((p, i) => (
-            <button key={p.id} onClick={() => togglePrio(p)} title="mark done" style={{
-              display: 'flex', alignItems: 'center', gap: 7, padding: '6px 11px', borderRadius: 20, cursor: 'pointer', maxWidth: 200,
-              background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)', color: '#fff3d0', fontSize: 12,
-            }}>
-              <span style={{ fontFamily: MONO, fontSize: 9, color: GOLD }}>{String(i + 1).padStart(2, '0')}</span>
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.text}</span>
-            </button>
+
+        {/* ═══ THIS WEEK ═══ */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0,1fr)' : 'minmax(0,1.25fr) minmax(0,1fr)', gap: 14, animation: 'sbRise .5s both' }}>
+          <GoalsCard goals={goals} pagesById={byId} onSave={saveGoals} onAdd={t => addGoal(t)} onOpen={id => setOpenId(id)} />
+          <PriosCard prios={prios} onAdd={addPrio} onToggle={togglePrio} onRemove={removePrio} />
+        </div>
+
+        {/* ═══ PAGES ═══ */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '28px 0 14px' }}>
+          <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: 3, color: '#cfe8ff', fontWeight: 700, marginRight: 6 }}>◇ PAGES</div>
+          {!q && FILTERS.map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)} style={{
+              fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '6px 11px', borderRadius: 20, cursor: 'pointer',
+              color: filter === f.key ? '#04121f' : 'rgba(170,210,250,0.75)', background: filter === f.key ? BLUE : 'rgba(80,180,255,0.06)',
+              border: `1px solid ${filter === f.key ? BLUE : 'rgba(120,190,255,0.2)'}`, fontWeight: filter === f.key ? 700 : 400,
+            }}>{f.label}</button>
           ))}
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search all pages…" style={{
+            marginLeft: isMobile ? 0 : 'auto', flex: isMobile ? '1 1 100%' : '0 1 240px', background: 'rgba(4,12,30,0.6)', border: '1px solid rgba(120,190,255,0.2)',
+            borderRadius: 20, padding: '8px 14px', color: '#e6f2ff', fontFamily: SANS, fontSize: 13, outline: 'none',
+          }} />
         </div>
-        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          {habits.map(h => {
-            const done = todayDone.includes(h.id)
-            return <button key={h.id} onClick={() => toggleHabit(h.id)} title={h.label} style={{
-              width: 34, height: 34, borderRadius: 10, cursor: 'pointer', fontSize: 15,
-              background: done ? 'rgba(52,211,153,0.2)' : 'rgba(0,0,0,0.2)', border: `1px solid ${done ? 'rgba(52,211,153,0.55)' : 'rgba(80,180,255,0.12)'}`,
-              boxShadow: done ? '0 0 14px rgba(52,211,153,0.25)' : 'none', filter: done ? 'none' : 'grayscale(0.5)', opacity: done ? 1 : 0.75,
-            }}>{h.emoji}</button>
-          })}
-        </div>
-        {(inbox.length > 0 || dueSoon > 0) && (
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            {inbox.length > 0 && <button onClick={() => setProcessing(true)} style={{ ...pill, color: GOLD, borderColor: 'rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.1)' }}>▶ {inbox.length} INBOX</button>}
-            {dueSoon > 0 && <button onClick={() => setLibrary(true)} style={{ ...pill, color: '#f87171', borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)' }}>◷ {dueSoon} DUE</button>}
+
+        {showNew && <NewPageForm onCancel={() => setShowNew(false)} onCreate={async f => { setShowNew(false); await createPage(f) }} />}
+
+        {!loaded ? (
+          <div style={{ fontFamily: MONO, fontSize: 11, color: DIM, padding: 40, textAlign: 'center' }}>Loading…</div>
+        ) : visible.length === 0 ? (
+          <div style={{ padding: '44px 20px', textAlign: 'center', borderRadius: 16, border: '1px dashed rgba(120,190,255,0.22)', color: DIM }}>
+            {q ? <div style={{ fontSize: 14 }}>No page matches “{q}”.</div> : rootCount === 0 ? (
+              <>
+                <div style={{ fontSize: 17, color: '#eef6ff', fontWeight: 600 }}>Your brain is empty — start with your big topics</div>
+                <div style={{ fontSize: 13, marginTop: 6 }}>One page per area of life or project. Sub-pages for everything inside.</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 18 }}>
+                  {[['🤖', 'AI Dev'], ['🏝', 'Land & Property'], ['📈', 'Trading'], ['💼', 'Business'], ['🏋️', 'Health'], ['💡', 'Ideas']].map(([e, t]) => (
+                    <button key={t} onClick={() => createPage({ title: t, emoji: e }, false)} style={suggBtn}>{e} {t}</button>
+                  ))}
+                </div>
+                {oldCount > 0 && (
+                  <button onClick={importOld} disabled={importing} style={{ ...ghostBtn, marginTop: 20 }}>
+                    {importing ? 'IMPORTING…' : `⇣ IMPORT ${oldCount} NOTES FROM THE OLD SECONDBRAIN`}
+                  </button>
+                )}
+              </>
+            ) : <div style={{ fontSize: 14 }}>Nothing in this filter.</div>}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0,1fr))' : 'repeat(auto-fill, minmax(230px, 1fr))', gap: isMobile ? 10 : 14 }}>
+            {visible.map((p, i) => (
+              <PageTile key={p.id} page={p} index={i} count={countDeep(p.id)} path={q && p.parent_id ? trail(p).slice(0, -1).map(x => x.title).join(' / ') : ''}
+                onOpen={() => setOpenId(p.id)} onPrio={() => cyclePrio(p)} onPin={() => patchPage(p.id, { pinned: !p.pinned })} onDelete={() => deletePage(p)} />
+            ))}
           </div>
         )}
-      </div>
 
-      {/* ═══ TOPICS + MIND STREAM ═══ */}
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(0, 1fr)', gap: 14, height: isMobile ? 'auto' : heroH }}>
-
-        <TopicsBoard
-          topics={topicViews} maxHeat={maxHeat} height={isMobile ? 'auto' : heroH}
-          onCyclePrio={cyclePrio} onToggleFocus={toggleFocus} onTogglePause={togglePause}
-          onOpenBoard={openBoard} onOpenNote={id => setSelectedId(id)}
-          onDoneTask={id => patchNote(id, { status: 'done' })}
-          onAddTopic={name => upsertTopic(name, {})}
-        />
-
-        {/* mind stream */}
-        <div style={{ display: 'flex', flexDirection: 'column', borderRadius: 22, overflow: 'hidden', border: '1px solid rgba(80,180,255,0.12)', background: 'linear-gradient(180deg, rgba(10,24,54,0.6), rgba(4,12,30,0.55))', backdropFilter: 'blur(14px)', height: isMobile ? 560 : heroH }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid rgba(80,180,255,0.08)', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Orb busy={busy} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: 2.5, color: '#dff0ff', fontWeight: 700 }}>OREN · MIND</div>
-              <div style={{ fontSize: 11, color: DIM, marginTop: 1 }}>{busy ? 'denkt nach…' : 'files · answers · thinks with you'}</div>
-            </div>
-            {isAdmin && <button onClick={planDay} disabled={planning} style={{ ...pill, color: GOLD, borderColor: 'rgba(251,191,36,0.45)', background: 'rgba(251,191,36,0.1)', cursor: planning ? 'wait' : 'pointer' }}>{planning ? 'PLANNING…' : '☀ PLAN MY DAY'}</button>}
+        {/* ═══ BRAIN ORB ═══ */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 46 }}>
+          <button onClick={() => setBrainOpen(true)} aria-label="open your brain" className="sb-orb" style={{ position: 'relative', width: 170, height: 170, borderRadius: '50%', cursor: 'pointer', padding: 0, border: 'none', background: 'transparent' }}>
+            <div style={{ position: 'absolute', inset: -50, pointerEvents: 'none' }}><OrenCoreGL orbState="idle" size={270} /></div>
+            <span className="sb-orb-ring" style={{ position: 'absolute', inset: 16, borderRadius: '50%', border: '1px solid rgba(120,200,255,0.25)', pointerEvents: 'none' }} />
+          </button>
+          <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 3, color: DIM, marginTop: 40, position: 'relative', zIndex: 2 }}>
+            <span style={{ color: BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{pages.length}</b> PAGES · <b style={{ color: '#cfe8ff' }}>{rootCount}</b> AREAS
           </div>
-
-          <div ref={streamRef} className="sb-scroll" style={{ flex: 1, overflowY: 'auto', padding: '18px 18px 8px' }}>
-            {!mindReady && <Note2>Run <b>lib/sql/brain_mind.sql</b> in Supabase to activate the conversation.</Note2>}
-            {msgs.length > 0 && msgs.length > todaysMsgs.length && <div style={dayDivider}>EARLIER</div>}
-            {msgs.map((m, i) => {
-              const prev = msgs[i - 1]
-              const newDay = prev && prev.created_at.slice(0, 10) !== m.created_at.slice(0, 10)
-              return (
-                <React.Fragment key={m.id}>
-                  {newDay && <div style={dayDivider}>{new Date(m.created_at).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}</div>}
-                  <Bubble m={m} notes={notes} onOpen={setSelectedId} onHover={ids => setGlow(ids ? new Set(ids) : null)} />
-                </React.Fragment>
-              )
-            })}
-            {todaysMsgs.length === 0 && loaded && (
-              <div style={{ display: 'flex', gap: 10, margin: '6px 0 14px', animation: 'sbRise .4s ease' }}>
-                <Orb small />
-                <div style={{ ...orenBubble }}>
-                  <div style={{ fontSize: 14, color: '#e8f3ff', lineHeight: 1.6 }}>
-                    {greeting}, {firstName}.{isAdmin && briefing?.focus ? <> Heute zählt vor allem: <b style={{ color: '#fff' }}>{briefing.focus}</b>.</> : ''} Was geht dir durch den Kopf?
-                  </div>
-                  <div style={{ fontSize: 11.5, color: DIM, marginTop: 6 }}>Schreib oder sprich einfach — Ideen, Aufgaben, Fragen, Grübeleien. Oder drück <b style={{ color: GOLD }}>☀ PLAN MY DAY</b>, dann plane ich deinen Tag und lege für jedes Fokus-Thema ein Tagesboard an.</div>
-                </div>
-              </div>
-            )}
-            {busy && (
-              <div style={{ display: 'flex', gap: 10, margin: '8px 0', alignItems: 'center' }}>
-                <Orb small busy />
-                <div style={{ display: 'flex', gap: 4 }}>{[0, 1, 2].map(k => <span key={k} style={{ width: 6, height: 6, borderRadius: '50%', background: MINT, animation: `sbDot 1.2s ${k * 0.15}s infinite` }} />)}</div>
-              </div>
-            )}
-          </div>
-
-          {todaysMsgs.length === 0 && !busy && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 18px 10px' }}>
-              {PROMPTS.map(p => (
-                <button key={p} onClick={() => { setInput(p.endsWith('…') ? p.slice(0, -1) : p); inputRef.current?.focus() }} style={{ ...pill, fontFamily: 'DM Sans, system-ui, sans-serif', fontSize: 11.5, letterSpacing: 0, textTransform: 'none' }}>{p}</button>
-              ))}
-            </div>
-          )}
-
-          <div style={{ padding: 12, borderTop: '1px solid rgba(80,180,255,0.08)' }}>
-            <div style={{
-              display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 8px 8px 14px', borderRadius: 16,
-              background: 'rgba(4,12,30,0.7)', border: `1px solid ${listening ? 'rgba(248,113,113,0.55)' : 'rgba(120,200,255,0.22)'}`,
-              boxShadow: listening ? '0 0 24px rgba(248,113,113,0.15)' : 'inset 0 1px 0 rgba(160,220,255,0.05)',
-            }}>
-              <textarea
-                ref={inputRef} value={input} rows={1}
-                onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px' }}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                placeholder={listening ? 'Ich höre zu…' : 'Denk laut… (Enter senden, Shift+Enter neue Zeile)'}
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none', color: '#eef6ff', fontSize: 14.5, lineHeight: 1.5, fontFamily: 'DM Sans, system-ui, sans-serif', padding: '6px 0', maxHeight: 140 }}
-              />
-              <button onClick={toggleVoice} title="voice" style={{ ...roundBtn, background: listening ? 'rgba(248,113,113,0.22)' : 'rgba(80,180,255,0.08)', borderColor: listening ? 'rgba(248,113,113,0.6)' : 'rgba(120,200,255,0.25)', animation: listening ? 'sbPulse 1.2s infinite' : undefined }}>{listening ? '■' : '🎙'}</button>
-              <button onClick={() => send()} disabled={busy || !input.trim()} style={{ ...roundBtn, background: input.trim() ? 'rgba(52,211,153,0.22)' : 'rgba(80,180,255,0.06)', borderColor: input.trim() ? 'rgba(52,211,153,0.55)' : 'rgba(120,200,255,0.15)', color: input.trim() ? MINT : DIM }}>↑</button>
-            </div>
-          </div>
+          <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(120,180,230,0.35)', marginTop: 4 }}>TAP TO ENTER</div>
         </div>
       </div>
 
-      {/* ═══ BRAIN ORB (bottom) ═══ */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 10, paddingBottom: 10 }}>
-        <button onClick={() => setBrainOpen(true)} aria-label="open your brain" className="sb-orb" style={{
-          position: 'relative', width: 190, height: 190, borderRadius: '50%', cursor: 'pointer', padding: 0, border: 'none', background: 'transparent',
-        }}>
-          <div style={{ position: 'absolute', inset: -55, pointerEvents: 'none' }}>
-            <OrenCoreGL orbState={glow || busy ? 'thinking' : 'idle'} size={300} />
-          </div>
-          <span className="sb-orb-ring" style={{ position: 'absolute', inset: 18, borderRadius: '50%', border: '1px solid rgba(120,200,255,0.25)', pointerEvents: 'none' }} />
-        </button>
-        <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 3, color: DIM, marginTop: 46, textAlign: 'center', position: 'relative', zIndex: 2 }}>
-          <span style={{ color: glow ? MINT : BLUE }}>●</span> YOUR BRAIN · <b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS
-        </div>
-        <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(120,180,230,0.35)', marginTop: 4 }}>{glow ? `✦ ${glow.size} NEURONS ACTIVE` : 'TAP TO ENTER'}</div>
-      </div>
-
-      {/* ═══ BRAIN FULLSCREEN ═══ */}
       {brainOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 88, background: 'radial-gradient(ellipse at 50% 60%, #0a1a3c 0%, #030915 60%, #000 100%)', animation: 'sbBrainIn .75s cubic-bezier(.2,.8,.2,1) both' }}>
-          <KnowledgeGraph
-            notes={graphNotes} selectedId={selectedId} highlight={glow} burstId={burstId}
-            height={winH}
-            onSelect={id => setSelectedId(id)}
-            onTag={() => { setBrainOpen(false); setLibrary(true) }}
-          />
+          <KnowledgeGraph notes={graphNotes} selectedId={null} highlight={null} height={winH}
+            onSelect={id => { if (id) { setBrainOpen(false); setOpenId(id) } }}
+            onTag={tag => { const r = pages.find(p => !p.parent_id && p.title === tag); if (r) { setBrainOpen(false); setOpenId(r.id) } }} />
           <div style={{ position: 'absolute', top: 24, left: 28, pointerEvents: 'none', animation: 'sbRise .6s .3s both' }}>
             <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: 4, color: '#dff0ff', fontWeight: 700 }}>YOUR BRAIN</div>
-            <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: DIM, marginTop: 4 }}><b style={{ color: '#cfe8ff' }}>{live.length}</b> NEURONS · <b style={{ color: '#cfe8ff' }}>{tagCount}</b> TOPICS · DRAG TO ROTATE · CLICK A NEURON</div>
-          </div>
-          <button onClick={() => setBrainOpen(false)} style={{ position: 'absolute', top: 22, right: 26, ...topBtn, animation: 'sbRise .6s .3s both' }}>✕ CLOSE</button>
-          {loaded && live.length === 0 && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: '62%', textAlign: 'center', pointerEvents: 'none', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>
-              TALK TO OREN → EVERY THOUGHT BECOMES A NEURON
+            <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: 2, color: DIM, marginTop: 4 }}>{pages.length} PAGES · DRAG TO ROTATE · CLICK TO OPEN</div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 10, fontFamily: MONO, fontSize: 9, letterSpacing: 1.2, color: DIM }}>
+              {[['#ff9f43', 'P1'], ['#ffd73c', 'P2'], ['#64c8ff', 'P3 / –'], ['#b47cff', 'SOMEDAY'], ['#34d399', 'DONE']].map(([c, l]) => <span key={l}><span style={{ color: c }}>●</span> {l}</span>)}
             </div>
-          )}
+          </div>
+          <button onClick={() => setBrainOpen(false)} style={{ position: 'absolute', top: 22, right: 26, ...ghostBtn, animation: 'sbRise .6s .3s both' }}>✕ CLOSE</button>
+          {pages.length === 0 && <div style={{ position: 'absolute', left: 0, right: 0, top: '62%', textAlign: 'center', fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, color: DIM }}>EVERY PAGE BECOMES A NEURON</div>}
         </div>
-      )}
-
-      {/* ═══ LIBRARY ═══ */}
-      {library && <Library notes={notes} isMobile={isMobile} onClose={() => setLibrary(false)} onOpen={id => setSelectedId(id)} />}
-
-      {/* ═══ NOTE PAGE ═══ */}
-      {selected && (
-        <NotePage
-          n={selected as PageNote} notes={notes as PageNote[]} projectNames={projectNames} isAdmin={isAdmin} isMobile={isMobile}
-          getToken={token}
-          onClose={() => setSelectedId(null)} onPatch={p => patchNote(selected.id, p as Partial<Note>)} onDelete={() => deleteNote(selected.id)}
-          onToday={() => sendToToday(selected)} onOpen={id => setSelectedId(id)} onTag={() => { setSelectedId(null); setLibrary(true) }}
-        />
-      )}
-
-      {/* ═══ PROCESS INBOX ═══ */}
-      {processing && (
-        <ProcessInbox
-          items={inbox} projectNames={projectNames}
-          onClose={() => setProcessing(false)}
-          onToday={n => sendToToday(n)}
-          onProject={(n, project) => patchNote(n.id, { status: 'active', project: project || n.project })}
-          onKeep={n => patchNote(n.id, { status: 'reference' })}
-          onDrop={n => patchNote(n.id, { status: 'archived' })}
-        />
       )}
 
       <style>{`
-        @keyframes sbSpin { to { transform: rotate(360deg) } }
-        @keyframes sbPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5) } 50% { box-shadow: 0 0 0 8px rgba(248,113,113,0) } }
-        @keyframes sbFade { from { opacity: 0 } to { opacity: 1 } }
         @keyframes sbRise { from { transform: translateY(10px); opacity: 0 } to { transform: none; opacity: 1 } }
-        @keyframes sbCardIn { from { transform: translateY(18px) scale(.97); opacity: 0 } to { transform: none; opacity: 1 } }
-        @keyframes sbSlide { from { transform: translateX(30px); opacity: 0 } to { transform: none; opacity: 1 } }
+        @keyframes sbCardIn { from { transform: translateY(16px) scale(.97); opacity: 0 } to { transform: none; opacity: 1 } }
         @keyframes sbBrainIn { from { clip-path: circle(0% at 50% 92%); opacity: .4 } to { clip-path: circle(150% at 50% 92%); opacity: 1 } }
         .sb-orb { transition: transform .35s cubic-bezier(.2,.8,.2,1) }
         .sb-orb:hover { transform: scale(1.06) }
         .sb-orb:hover .sb-orb-ring { border-color: rgba(120,200,255,0.55) !important; box-shadow: 0 0 40px rgba(80,170,255,0.25) }
-        @keyframes sbDot { 0%,80%,100% { transform: scale(.5); opacity: .3 } 40% { transform: scale(1); opacity: 1 } }
-        @keyframes sbOrb { 0%,100% { box-shadow: 0 0 12px rgba(52,211,153,.5), inset 0 0 8px rgba(255,255,255,.4) } 50% { box-shadow: 0 0 26px rgba(52,211,153,.9), inset 0 0 12px rgba(255,255,255,.7) } }
-        .sb-scroll { scrollbar-width: thin; scrollbar-color: rgba(80,180,255,.2) transparent }
-        .sb-card:hover { transform: translateY(-2px) }
+        .sb-tile { transition: transform .2s ease, background .2s ease, box-shadow .2s ease }
+        .sb-tile:hover { transform: translateY(-3px); background: rgba(14,32,66,0.8) !important; box-shadow: 0 14px 34px rgba(0,0,0,0.45) }
+        .sb-tile .sb-act { opacity: 0; transition: opacity .15s }
+        .sb-tile:hover .sb-act { opacity: 1 }
+        @media (hover: none) { .sb-tile .sb-act { opacity: .7 } }
+        .sb-row:hover .sb-x { opacity: 1 !important }
       `}</style>
     </ModuleLayout>
   )
 }
 
-// ─── message bubble ───
-function Bubble({ m, notes, onOpen, onHover }: { m: Msg; notes: Note[]; onOpen: (id: string) => void; onHover: (ids: string[] | null) => void }) {
-  if (m.role === 'me') {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '10px 0', animation: 'sbRise .25s ease' }}>
-        <div style={{ maxWidth: '82%', padding: '10px 14px', borderRadius: '16px 16px 4px 16px', background: 'linear-gradient(135deg, rgba(60,130,230,0.32), rgba(40,90,180,0.22))', border: '1px solid rgba(120,190,255,0.25)', opacity: m.pending ? 0.7 : 1 }}>
-          <div style={{ fontSize: 14, color: '#f0f7ff', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{m.content}</div>
-          <div style={{ fontFamily: MONO, fontSize: 8.5, color: 'rgba(180,215,250,0.45)', textAlign: 'right', marginTop: 4 }}>{timeOf(m.created_at)}</div>
-        </div>
-      </div>
-    )
-  }
-  const filed = m.note_id ? notes.find(n => n.id === m.note_id) : null
-  const cited = (m.cited || []).map(id => notes.find(n => n.id === id)).filter(Boolean) as Note[]
-  const it = m.intent ? INTENT[m.intent] : null
+// ═══ WEEKLY GOALS ═══
+function GoalsCard({ goals, pagesById, onSave, onAdd, onOpen }: { goals: Goal[]; pagesById: Map<string, Page>; onSave: (g: Goal[]) => void; onAdd: (t: string) => void; onOpen: (id: string) => void }) {
+  const [text, setText] = useState('')
+  const done = goals.filter(g => g.done).length
+  const pct = goals.length ? Math.round((done / goals.length) * 100) : 0
   return (
-    <div style={{ display: 'flex', gap: 10, margin: '10px 0', animation: 'sbRise .3s ease' }}
-      onMouseEnter={() => (cited.length || filed) && onHover([...cited.map(c => c.id), ...(filed ? [filed.id] : [])])} onMouseLeave={() => onHover(null)}>
-      <Orb small />
-      <div style={{ ...orenBubble, maxWidth: '86%' }}>
-        {it && <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 2, color: it.color, marginBottom: 5 }}>{it.label}</div>}
-        <div style={{ fontSize: 14, color: '#e3efff', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{m.content}</div>
-        {filed && (
-          <div onClick={() => onOpen(filed.id)} className="sb-card" style={{
-            marginTop: 10, padding: '9px 11px', borderRadius: 11, cursor: 'pointer', transition: 'transform .2s',
-            background: `linear-gradient(135deg, ${TYPE_COLORS[filed.type] || BLUE}1c, rgba(6,16,38,0.4))`, border: `1px solid ${TYPE_COLORS[filed.type] || BLUE}44`,
-          }}>
-            <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 1.5, color: TYPE_COLORS[filed.type] || BLUE }}>
-              {TYPE_ICON[filed.type]} {filed.type.toUpperCase()}{filed.project ? ` · ${filed.project.toUpperCase()}` : ''}{filed.due ? ` · DUE ${new Date(filed.due + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).toUpperCase()}` : ''}
-            </div>
-            <div style={{ fontSize: 13, color: '#f2f8ff', fontWeight: 600, marginTop: 3 }}>{filed.title}</div>
-            {filed.next_action && <div style={{ fontSize: 11.5, color: 'rgba(255,243,208,0.8)', marginTop: 3 }}>→ {filed.next_action}</div>}
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <div>
+          <div style={label}>◇ WEEK {isoWeek()} · WEEKLY GOALS</div>
+          <div style={{ fontSize: 12, color: DIM, marginTop: 3 }}>{weekRange()}</div>
+        </div>
+        <div style={{ fontFamily: MONO, fontSize: 22, color: pct === 100 && goals.length ? MINT : '#eaf4ff', fontWeight: 700 }}>{done}<span style={{ fontSize: 13, color: DIM }}>/{goals.length}</span></div>
+      </div>
+      <div style={{ height: 5, borderRadius: 4, background: 'rgba(80,180,255,0.1)', margin: '12px 0 10px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: `linear-gradient(90deg, ${BLUE}, ${MINT})`, transition: 'width .5s cubic-bezier(.2,.8,.2,1)' }} />
+      </div>
+      {goals.map(g => {
+        const pg = g.page_id ? pagesById.get(g.page_id) : undefined
+        return (
+          <div key={g.id} className="sb-row" style={rowStyle}>
+            <Check on={g.done} color={MINT} onClick={() => onSave(goals.map(x => x.id === g.id ? { ...x, done: !x.done } : x))} />
+            <InlineText value={g.text} done={g.done} onSave={v => onSave(goals.map(x => x.id === g.id ? { ...x, text: v } : x))} />
+            {pg && <button onClick={() => onOpen(pg.id)} title="open page" style={chip}>{pg.emoji} OPEN</button>}
+            <button className="sb-x" onClick={() => onSave(goals.filter(x => x.id !== g.id))} style={xBtn}>✕</button>
           </div>
-        )}
-        {cited.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 9 }}>
-            {cited.map(c => (
-              <button key={c.id} onClick={() => onOpen(c.id)} style={{ fontFamily: MONO, fontSize: 9, padding: '3px 9px', borderRadius: 20, cursor: 'pointer', color: TYPE_COLORS[c.type] || BLUE, background: 'rgba(0,0,0,0.25)', border: `1px solid ${(TYPE_COLORS[c.type] || BLUE)}44`, maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {TYPE_ICON[c.type]} {c.title}
-              </button>
-            ))}
-          </div>
-        )}
-        <div style={{ fontFamily: MONO, fontSize: 8.5, color: 'rgba(120,180,230,0.35)', marginTop: 6 }}>{timeOf(m.created_at)}</div>
+        )
+      })}
+      <input value={text} onChange={e => setText(e.target.value)} placeholder={goals.length ? '+ add a goal for this week' : '+ What has to be true by Sunday? (Enter)'}
+        onKeyDown={e => { if (e.key === 'Enter' && text.trim()) { onAdd(text); setText('') } }} style={addInput} />
+    </div>
+  )
+}
+
+// ═══ TODAY'S PRIORITIES ═══
+function PriosCard({ prios, onAdd, onToggle, onRemove }: { prios: Prio[]; onAdd: (t: string) => void; onToggle: (p: Prio) => void; onRemove: (p: Prio) => void }) {
+  const [text, setText] = useState('')
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+  return (
+    <div style={card}>
+      <div style={label}>◇ TODAY · PRIORITIES</div>
+      <div style={{ fontSize: 12, color: DIM, marginTop: 3, marginBottom: 12 }}>{today}</div>
+      {prios.map((p, i) => (
+        <div key={p.id} className="sb-row" style={rowStyle}>
+          <span style={{ fontFamily: MONO, fontSize: 10, width: 16, color: i < 3 ? '#fbbf24' : DIM, fontWeight: 700 }}>{i + 1}</span>
+          <Check on={p.done} color="#fbbf24" onClick={() => onToggle(p)} />
+          <span style={{ flex: 1, fontSize: 14, color: p.done ? DIM : '#e6f2ff', textDecoration: p.done ? 'line-through' : 'none' }}>{p.text}</span>
+          <button className="sb-x" onClick={() => onRemove(p)} style={xBtn}>✕</button>
+        </div>
+      ))}
+      {!prios.length && <div style={{ fontSize: 13, color: DIM, padding: '4px 0 8px' }}>Pick the 3 things that make today a win.</div>}
+      <input value={text} onChange={e => setText(e.target.value)} placeholder="+ add priority (Enter)"
+        onKeyDown={e => { if (e.key === 'Enter' && text.trim()) { onAdd(text); setText('') } }} style={addInput} />
+    </div>
+  )
+}
+
+// ═══ TILES ═══
+function PageTile({ page, index, count, path, onOpen, onPrio, onPin, onDelete }: { page: Page; index: number; count: number; path: string; onOpen: () => void; onPrio: () => void; onPin: () => void; onDelete: () => void }) {
+  const st = STATUS.find(s => s.key === page.status) || STATUS[0]
+  const pr = page.priority ? PRIO[page.priority] : null
+  return (
+    <div onClick={onOpen} className="sb-tile" style={{
+      position: 'relative', minHeight: 128, minWidth: 0, padding: '15px 14px 13px', borderRadius: 14, cursor: 'pointer',
+      background: 'rgba(8,20,48,0.6)', border: '1px solid rgba(80,180,255,0.16)', borderLeft: `3px solid ${page.color}`,
+      display: 'flex', flexDirection: 'column', justifyContent: 'space-between', animation: `sbCardIn .45s ${Math.min(index, 12) * 0.035}s both`,
+      opacity: page.status === 'done' || page.status === 'archived' ? 0.62 : 1,
+    }}>
+      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 4 }}>
+        <button className={page.pinned ? '' : 'sb-act'} onClick={e => { e.stopPropagation(); onPin() }} title={page.pinned ? 'unpin' : 'pin to top'} style={{ ...iconBtn, color: page.pinned ? '#fbbf24' : DIM }}>{page.pinned ? '★' : '☆'}</button>
+        <button className="sb-act" onClick={e => { e.stopPropagation(); onDelete() }} title="delete" style={{ ...iconBtn, color: 'rgba(255,120,120,0.7)' }}>✕</button>
+      </div>
+      <div>
+        <div style={{ fontSize: 28, lineHeight: 1 }}>{page.emoji}</div>
+        {path && <div style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 1, color: DIM, marginTop: 8 }}>{path.toUpperCase()}</div>}
+        <div style={{ fontFamily: SANS, fontSize: 16.5, fontWeight: 600, color: '#f3f8ff', marginTop: 9, lineHeight: 1.25, paddingRight: 30 }}>{page.title}</div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 14, flexWrap: 'wrap' }}>
+        <button onClick={e => { e.stopPropagation(); onPrio() }} title="priority (click to change)" style={{
+          fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: 1, padding: '3px 7px', borderRadius: 6, cursor: 'pointer',
+          color: pr ? pr.color : DIM, background: pr ? pr.color + '1f' : 'transparent', border: `1px solid ${pr ? pr.color + '66' : 'rgba(120,190,255,0.2)'}`,
+        }}>{pr ? pr.label : 'P–'}</button>
+        <span style={{ fontFamily: MONO, fontSize: 8.5, letterSpacing: 1.2, color: st.color }}>● {st.label}</span>
+        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 8.5, letterSpacing: 1, color: DIM, whiteSpace: 'nowrap' }}>{count ? `${count} SUB · ` : ''}{ago(page.updated_at).toUpperCase()}</span>
       </div>
     </div>
   )
 }
 
-// ─── library overlay ───
-function Library({ notes, isMobile, onClose, onOpen }: { notes: Note[]; isMobile: boolean; onClose: () => void; onOpen: (id: string) => void }) {
-  const [q, setQ] = useState('')
-  const [type, setType] = useState<string | null>(null)
-  const [status, setStatus] = useState<'all' | Status>('all')
-  const [project, setProject] = useState<string | null>(null)
+function SubTile({ page, count, onOpen }: { page: Page; count: number; onOpen: () => void }) {
+  const pr = page.priority ? PRIO[page.priority] : null
+  return (
+    <button onClick={onOpen} className="sb-tile" style={{
+      textAlign: 'left', minHeight: 64, padding: '10px 12px', borderRadius: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+      background: 'rgba(8,20,48,0.6)', border: '1px solid rgba(80,180,255,0.16)', borderLeft: `3px solid ${page.color}`,
+      opacity: page.status === 'done' || page.status === 'archived' ? 0.6 : 1,
+    }}>
+      <span style={{ fontSize: 20 }}>{page.emoji}</span>
+      <span style={{ minWidth: 0, flex: 1 }}>
+        <span style={{ display: 'block', fontFamily: SANS, fontSize: 13.5, fontWeight: 600, color: '#eef6ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{page.title}</span>
+        <span style={{ display: 'block', fontFamily: MONO, fontSize: 8.5, letterSpacing: 1, color: DIM, marginTop: 3 }}>
+          {pr && <b style={{ color: pr.color }}>{pr.label} · </b>}{count ? `${count} SUB · ` : ''}{page.status.toUpperCase()}
+        </span>
+      </span>
+    </button>
+  )
+}
+
+// ═══ PAGE CONTROLS (in the editor header) ═══
+function PageControls({ page, isMobile, inWeek, onPrio, onPatch, onDelete, onWeek }: { page: Page; isMobile: boolean; inWeek: boolean; onPrio: () => void; onPatch: (f: Partial<Page>) => void; onDelete: () => void; onWeek: () => void }) {
+  const [menu, setMenu] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-  const projects = useMemo(() => Array.from(new Set(notes.map(n => n.project).filter(Boolean) as string[])), [notes])
-  const list = useMemo(() => {
-    const s = q.trim().toLowerCase()
-    return notes.filter(n =>
-      (status === 'all' ? n.status !== 'archived' : n.status === status) && (!type || n.type === type) && (!project || n.project === project) &&
-      (!s || `${n.title} ${n.summary || ''} ${n.body || ''} ${n.tags.join(' ')} ${n.project || ''}`.toLowerCase().includes(s)))
-      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.due && !b.due ? -1 : 0))
-  }, [notes, q, type, status, project])
-
+    if (!menu) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setMenu(false) }
+    document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close)
+  }, [menu])
+  const pr = page.priority ? PRIO[page.priority] : null
+  const st = STATUS.find(s => s.key === page.status) || STATUS[0]
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 85, background: 'radial-gradient(ellipse at 50% 0%, rgba(12,30,66,0.97), rgba(2,6,16,0.98) 70%)', backdropFilter: 'blur(14px)', overflowY: 'auto', animation: 'sbFade .2s' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '18px 16px 60px' : '28px 36px 80px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-          <button onClick={onClose} style={topBtn}>‹ BACK</button>
-          <div style={{ fontFamily: MONO, fontSize: 12, letterSpacing: 3, color: '#dff0ff', fontWeight: 700 }}>LIBRARY</div>
-          <div style={{ flex: 1 }} />
-          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="⌕ search everything…" style={{ width: isMobile ? 160 : 320, background: 'rgba(6,16,38,0.7)', border: '1px solid rgba(120,200,255,0.25)', borderRadius: 12, padding: '10px 14px', color: '#e8f3ff', fontSize: 13.5, outline: 'none', fontFamily: 'DM Sans, system-ui, sans-serif' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          {(['all', 'inbox', 'active', 'reference', 'done', 'archived'] as const).map(s => <Chip key={s} active={status === s} onClick={() => setStatus(s)} color={BLUE}>{s.toUpperCase()}</Chip>)}
-          <span style={{ width: 1, background: 'rgba(80,180,255,0.15)', margin: '0 4px' }} />
-          {TYPES.filter(t => notes.some(n => n.type === t)).map(t => <Chip key={t} active={type === t} onClick={() => setType(type === t ? null : t)} color={TYPE_COLORS[t]}>{TYPE_ICON[t]} {t.toUpperCase()}</Chip>)}
-        </div>
-        {projects.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
-            {projects.map(p => <Chip key={p} active={project === p} onClick={() => setProject(project === p ? null : p)} color="#bfe0ff">▣ {p}</Chip>)}
+    <div ref={ref} style={{ position: 'relative', display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+      <button onClick={onPrio} title="priority" style={{ ...hdrBtn, color: pr ? pr.color : DIM, borderColor: pr ? pr.color + '66' : 'rgba(120,190,255,0.25)' }}>{pr ? pr.label : 'P–'}</button>
+      {!isMobile && <button onClick={onWeek} title="add to this week's goals" style={{ ...hdrBtn, color: inWeek ? MINT : DIM, borderColor: inWeek ? MINT + '66' : 'rgba(120,190,255,0.25)' }}>{inWeek ? '✓ THIS WEEK' : '+ WEEK GOAL'}</button>}
+      <button onClick={() => setMenu(m => !m)} style={{ ...hdrBtn, color: st.color }}>{isMobile ? '⋯' : `● ${st.label} ⋯`}</button>
+      {menu && (
+        <div style={{ position: 'absolute', top: '120%', right: 0, zIndex: 40, width: 260, padding: 12, borderRadius: 14, background: 'rgba(8,18,40,0.98)', border: '1px solid rgba(120,190,255,0.25)', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+          <div style={menuLabel}>STATUS</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {STATUS.map(s => <button key={s.key} onClick={() => onPatch({ status: s.key })} style={{ ...hdrBtn, color: s.color, background: page.status === s.key ? 'rgba(80,180,255,0.14)' : 'transparent' }}>{s.label}</button>)}
           </div>
-        )}
-        {list.length === 0 && <div style={{ color: DIM, fontSize: 13, padding: 20 }}>Nothing here yet.</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-          {list.slice(0, 200).map(n => {
-            const c = TYPE_COLORS[n.type] || BLUE
-            const pr = checklistProgress(n.body)
-            const snippet = (n.body || '').split('\n').map(l => l.trim()).find(l => l && !l.startsWith('#') && !/^- \[( |x|X)\] ?$/.test(l) && l !== n.title)
-            return (
-              <div key={n.id} onClick={() => onOpen(n.id)} className="sb-card" style={{
-                position: 'relative', padding: '14px 15px 12px', borderRadius: 14, cursor: 'pointer', overflow: 'hidden', transition: 'transform .2s',
-                background: `linear-gradient(160deg, ${c}14, rgba(6,16,38,0.5) 55%)`, border: `1px solid ${c}30`, opacity: n.status === 'archived' || n.status === 'done' ? 0.6 : 1,
-              }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, width: 3, bottom: 0, background: c, boxShadow: `0 0 12px ${c}`, opacity: 0.8 }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 9, letterSpacing: 1.5, color: c }}>
-                  <span>{TYPE_ICON[n.type]} {n.type.toUpperCase()}{n.pinned ? '  ★' : ''}{n.status === 'inbox' ? '  · INBOX' : ''}</span>
-                  <span style={{ color: DIM }}>{n.due ? `DUE ${n.due.slice(5)}` : ago(n.created_at)}</span>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#eef6ff', marginTop: 7, lineHeight: 1.35, textDecoration: n.status === 'done' ? 'line-through' : 'none' }}>{n.title}</div>
-                {(snippet || n.summary) && <div style={{ fontSize: 12, color: 'rgba(200,225,250,0.6)', marginTop: 5, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{(snippet || '').replace(/^[-*>] (\[( |x|X)\] )?/, '') || n.summary}</div>}
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, fontFamily: MONO, fontSize: 9.5, flexWrap: 'wrap' }}>
-                  {pr.total > 0 && <span style={{ color: pr.done === pr.total ? MINT : GOLD }}>☑ {pr.done}/{pr.total}</span>}
-                  {n.project && <span style={{ color: '#bfe0ff' }}>▣ {n.project}</span>}
-                  {n.tags.length > 0 && <span style={{ color: 'rgba(190,225,255,0.5)' }}>{n.tags.map(t => '#' + t).join(' ')}</span>}
-                </div>
-              </div>
-            )
-          })}
+          {isMobile && <><div style={menuLabel}>WEEK</div><button onClick={onWeek} style={{ ...hdrBtn, color: inWeek ? MINT : '#cfe8ff' }}>{inWeek ? '✓ IN THIS WEEK — REMOVE' : '+ ADD AS WEEK GOAL'}</button></>}
+          <div style={menuLabel}>ICON</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {EMOJIS.map(e => <button key={e} onClick={() => onPatch({ emoji: e })} style={{ fontSize: 17, padding: 4, borderRadius: 6, cursor: 'pointer', background: page.emoji === e ? 'rgba(80,180,255,0.18)' : 'transparent', border: 'none' }}>{e}</button>)}
+          </div>
+          <div style={menuLabel}>COLOR</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {COLORS.map(c => <button key={c} onClick={() => onPatch({ color: c })} style={{ width: 20, height: 20, borderRadius: 10, cursor: 'pointer', background: c, border: page.color === c ? '2px solid #fff' : '2px solid transparent' }} />)}
+          </div>
+          <div style={menuLabel}>PIN</div>
+          <button onClick={() => onPatch({ pinned: !page.pinned })} style={{ ...hdrBtn, color: page.pinned ? '#fbbf24' : '#cfe8ff' }}>{page.pinned ? '★ PINNED — UNPIN' : '☆ PIN TO TOP'}</button>
+          <div style={{ height: 1, background: 'rgba(120,190,255,0.15)', margin: '12px 0' }} />
+          <button onClick={() => { setMenu(false); onDelete() }} style={{ ...hdrBtn, color: '#ff8a8a', borderColor: 'rgba(255,120,120,0.35)', width: '100%' }}>DELETE PAGE</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══ NEW PAGE ═══
+function NewPageForm({ onCancel, onCreate }: { onCancel: () => void; onCreate: (f: Partial<Page>) => void }) {
+  const [title, setTitle] = useState('')
+  const [emoji, setEmoji] = useState('📄')
+  const [color, setColor] = useState('#80c0ff')
+  const [priority, setPriority] = useState<number | null>(null)
+  const go = () => title.trim() && onCreate({ title: title.trim(), emoji, color, priority })
+  return (
+    <div style={{ ...card, marginBottom: 16, animation: 'sbRise .3s both' }}>
+      <div style={label}>◇ NEW PAGE</div>
+      <input value={title} autoFocus onChange={e => setTitle(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') go(); if (e.key === 'Escape') onCancel() }}
+        placeholder="e.g. AI Dev, Shemagi land, Q1 Business plan"
+        style={{ width: '100%', boxSizing: 'border-box', margin: '12px 0', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(120,190,255,0.22)', borderRadius: 10, padding: '11px 13px', color: '#f5f9ff', fontFamily: SANS, fontSize: 15, outline: 'none' }} />
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {EMOJIS.map(e => <button key={e} onClick={() => setEmoji(e)} style={{ fontSize: 17, padding: '6px 7px', borderRadius: 8, cursor: 'pointer', background: emoji === e ? 'rgba(80,180,255,0.18)' : 'rgba(0,0,0,0.25)', border: emoji === e ? '1px solid rgba(128,192,255,0.6)' : '1px solid rgba(80,180,255,0.12)' }}>{e}</button>)}
+      </div>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+        <div style={{ display: 'flex', gap: 6 }}>{COLORS.map(c => <button key={c} onClick={() => setColor(c)} style={{ width: 22, height: 22, borderRadius: 11, cursor: 'pointer', background: c, border: color === c ? '2px solid #fff' : '2px solid transparent' }} />)}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[1, 2, 3].map(n => <button key={n} onClick={() => setPriority(priority === n ? null : n)} style={{ ...hdrBtn, color: PRIO[n].color, background: priority === n ? PRIO[n].color + '22' : 'transparent', borderColor: priority === n ? PRIO[n].color : 'rgba(120,190,255,0.25)' }}>{PRIO[n].label}</button>)}
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button onClick={onCancel} style={ghostBtn}>CANCEL</button>
+          <button onClick={go} style={primaryBtn}>CREATE</button>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── pieces ───
-function Orb({ small, busy }: { small?: boolean; busy?: boolean }) {
-  const s = small ? 26 : 34
-  return <div style={{
-    width: s, height: s, borderRadius: '50%', flexShrink: 0, marginTop: small ? 2 : 0,
-    background: 'radial-gradient(circle at 35% 30%, #ffffff, #9ff5d6 25%, #34d399 55%, #0b4f3c 100%)',
-    animation: `sbOrb ${busy ? '0.9s' : '3s'} ease-in-out infinite`,
-  }} />
+// ═══ small parts ═══
+function Check({ on, color, onClick }: { on: boolean; color: string; onClick: () => void }) {
+  return <button onClick={onClick} style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#04121f', background: on ? color : 'transparent', border: `1.5px solid ${on ? color : 'rgba(140,190,240,0.4)'}`, transition: 'all .15s' }}>{on ? '✓' : ''}</button>
 }
-function Chip({ children, active, onClick, color }: { children: React.ReactNode; active?: boolean; onClick: () => void; color: string }) {
-  return (
-    <button onClick={onClick} style={{
-      fontFamily: MONO, fontSize: 9.5, letterSpacing: 1, padding: '5px 11px', borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap',
-      color: active ? color : 'rgba(170,205,240,0.6)', background: active ? `${color}1f` : 'rgba(6,16,38,0.55)',
-      border: `1px solid ${active ? color + '66' : 'rgba(80,180,255,0.15)'}`,
-    }}>{children}</button>
-  )
+function InlineText({ value, done, onSave }: { value: string; done: boolean; onSave: (v: string) => void }) {
+  const [v, setV] = useState(value)
+  useEffect(() => setV(value), [value])
+  return <input value={v} onChange={e => setV(e.target.value)} onBlur={() => v.trim() && v !== value && onSave(v.trim())} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+    style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', fontFamily: SANS, fontSize: 14, color: done ? DIM : '#e6f2ff', textDecoration: done ? 'line-through' : 'none', padding: 0 }} />
 }
-function Note2({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12, color: 'rgba(255,210,140,0.85)', padding: '8px 12px', borderRadius: 10, background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.2)', marginBottom: 12 }}>{children}</div>
-}
-const orenBubble: React.CSSProperties = { padding: '10px 14px', borderRadius: '16px 16px 16px 4px', background: 'rgba(14,34,70,0.55)', border: '1px solid rgba(80,180,255,0.14)' }
-const dayDivider: React.CSSProperties = { textAlign: 'center', fontFamily: MONO, fontSize: 8.5, letterSpacing: 2.5, color: 'rgba(120,180,230,0.35)', margin: '14px 0 6px' }
-const pill: React.CSSProperties = { fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '6px 11px', borderRadius: 20, cursor: 'pointer', color: 'rgba(190,220,250,0.75)', background: 'rgba(80,180,255,0.06)', border: '1px solid rgba(80,180,255,0.18)', whiteSpace: 'nowrap' }
-const topBtn: React.CSSProperties = { fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, padding: '7px 13px', borderRadius: 10, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(80,180,255,0.08)', border: '1px solid rgba(120,200,255,0.25)' }
-const roundBtn: React.CSSProperties = { width: 38, height: 38, borderRadius: 12, flexShrink: 0, cursor: 'pointer', fontSize: 15, color: '#cfe8ff', border: '1px solid', display: 'flex', alignItems: 'center', justifyContent: 'center' }
+
+const card: React.CSSProperties = { minWidth: 0, padding: '18px 18px 14px', borderRadius: 16, background: 'linear-gradient(160deg, rgba(10,26,58,0.75), rgba(4,12,30,0.75))', border: '1px solid rgba(120,190,255,0.18)', boxShadow: 'inset 0 1px 0 rgba(160,220,255,0.05)' }
+const label: React.CSSProperties = { fontFamily: MONO, fontSize: 10, letterSpacing: 2.5, color: '#9fd3ff', fontWeight: 700 }
+const menuLabel: React.CSSProperties = { fontFamily: MONO, fontSize: 8.5, letterSpacing: 2, color: DIM, margin: '12px 0 6px' }
+const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '7px 2px', borderBottom: '1px solid rgba(120,190,255,0.07)' }
+const addInput: React.CSSProperties = { width: '100%', boxSizing: 'border-box', marginTop: 8, background: 'transparent', border: 'none', borderBottom: '1px dashed rgba(120,190,255,0.22)', outline: 'none', padding: '8px 2px', color: '#e6f2ff', fontFamily: SANS, fontSize: 13.5 }
+const xBtn: React.CSSProperties = { opacity: 0, background: 'transparent', border: 'none', color: 'rgba(255,120,120,0.7)', cursor: 'pointer', fontSize: 12, padding: 2, transition: 'opacity .15s' }
+const chip: React.CSSProperties = { fontFamily: MONO, fontSize: 8.5, letterSpacing: 1, padding: '3px 7px', borderRadius: 6, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(80,180,255,0.08)', border: '1px solid rgba(120,190,255,0.22)', whiteSpace: 'nowrap' }
+const iconBtn: React.CSSProperties = { background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 14, padding: 3 }
+const crumbBtn: React.CSSProperties = { background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.5, color: DIM, padding: '2px 0' }
+const hdrBtn: React.CSSProperties = { fontFamily: MONO, fontSize: 9.5, letterSpacing: 1.2, fontWeight: 700, padding: '6px 10px', borderRadius: 8, cursor: 'pointer', background: 'transparent', border: '1px solid rgba(120,190,255,0.25)', whiteSpace: 'nowrap' }
+const primaryBtn: React.CSSProperties = { fontFamily: MONO, fontSize: 10, letterSpacing: 2, fontWeight: 700, padding: '8px 15px', borderRadius: 9, cursor: 'pointer', color: MINT, background: 'rgba(52,211,153,0.14)', border: '1px solid rgba(52,211,153,0.5)' }
+const ghostBtn: React.CSSProperties = { fontFamily: MONO, fontSize: 10, letterSpacing: 1.5, padding: '8px 14px', borderRadius: 9, cursor: 'pointer', color: '#cfe8ff', background: 'rgba(80,180,255,0.08)', border: '1px solid rgba(120,200,255,0.25)' }
+const suggBtn: React.CSSProperties = { fontFamily: SANS, fontSize: 13.5, padding: '9px 14px', borderRadius: 10, cursor: 'pointer', color: '#e6f2ff', background: 'rgba(80,180,255,0.07)', border: '1px solid rgba(120,190,255,0.22)' }

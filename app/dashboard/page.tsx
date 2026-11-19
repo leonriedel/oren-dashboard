@@ -160,7 +160,7 @@ export default function Dashboard() {
                    : 'STANDBY'
 
   const modules = [
-    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: !isAdmin },
+    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Pages · Goals · Priorities', locked: !isAdmin },
     { id: 'think',   key: '02', label: 'THINKSPACE',  sub: 'Shared Notes & Boards',locked: false },
     { id: 'radar',   key: '03', label: 'RADAR AI',  sub: 'Market Intelligence',  locked: !isAdmin },
     { id: 'finance', key: '04', label: 'FINANCE',     sub: 'Networth · Portfolio · Returns', locked: !isAdmin },
