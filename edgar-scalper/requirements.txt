@@ -5,3 +5,4 @@ supabase>=2.9
 python-dotenv>=1.0
 requests>=2.31
 oandapyV20>=0.7
+ib_insync>=0.9.86
