@@ -23,30 +23,30 @@ const DIM = 'rgba(140,185,230,0.5)'
 const BUCKET = 'thinkspace'
 
 const STATUS: { key: string; label: string; color: string }[] = [
-  { key: 'new', label: 'NEU', color: '#64c8ff' },
-  { key: 'check', label: 'PRÜFEN', color: '#fbbf24' },
-  { key: 'visited', label: 'BESICHTIGT', color: '#b47cff' },
-  { key: 'negotiate', label: 'VERHANDLUNG', color: '#ff9f43' },
-  { key: 'bought', label: 'GEKAUFT', color: '#34d399' },
-  { key: 'rejected', label: 'ABGELEHNT', color: '#f87171' },
+  { key: 'new', label: 'NEW', color: '#64c8ff' },
+  { key: 'check', label: 'REVIEW', color: '#fbbf24' },
+  { key: 'visited', label: 'VISITED', color: '#b47cff' },
+  { key: 'negotiate', label: 'NEGOTIATING', color: '#ff9f43' },
+  { key: 'bought', label: 'BOUGHT', color: '#34d399' },
+  { key: 'rejected', label: 'REJECTED', color: '#f87171' },
   { key: 'none', label: '—', color: 'rgba(140,185,230,0.4)' },
 ]
 const BLOCK_MENU: { type: BType | 'template'; icon: string; label: string; hint: string }[] = [
-  { type: 'section', icon: '▣', label: 'Bereich', hint: 'Über-Überschrift, z. B. Land, Design' },
-  { type: 'toggle', icon: '▸', label: 'Toggle', hint: 'aufklappbarer Eintrag mit Status' },
-  { type: 'template', icon: '🏝', label: 'Land / Objekt', hint: 'Toggle mit Details, Link, Bildern, Notizen' },
-  { type: 'text', icon: '¶', label: 'Text', hint: 'freier Text' },
-  { type: 'heading', icon: 'H', label: 'Überschrift', hint: 'kleine Zwischenüberschrift' },
-  { type: 'todo', icon: '☐', label: 'To-do', hint: 'Checkbox' },
-  { type: 'bullet', icon: '•', label: 'Aufzählung', hint: 'Listenpunkt' },
-  { type: 'link', icon: '↗', label: 'Link', hint: 'Vorschaukarte (Maps, Listing, Drive …)' },
-  { type: 'image', icon: '🖼', label: 'Bilder', hint: 'Fotos hochladen, Galerie' },
-  { type: 'props', icon: '☷', label: 'Details', hint: 'Tabelle: Preis, Größe, Lage …' },
-  { type: 'callout', icon: '💡', label: 'Hinweis', hint: 'farbige Info-Box' },
-  { type: 'divider', icon: '—', label: 'Trennlinie', hint: '' },
+  { type: 'section', icon: '▣', label: 'Section', hint: 'top-level heading, e.g. Land, Design' },
+  { type: 'toggle', icon: '▸', label: 'Toggle', hint: 'collapsible entry with status' },
+  { type: 'template', icon: '🏝', label: 'Land / Property', hint: 'toggle with details, link, images, notes' },
+  { type: 'text', icon: '¶', label: 'Text', hint: 'plain text' },
+  { type: 'heading', icon: 'H', label: 'Heading', hint: 'small sub-heading' },
+  { type: 'todo', icon: '☐', label: 'To-do', hint: 'checkbox' },
+  { type: 'bullet', icon: '•', label: 'Bullet', hint: 'list item' },
+  { type: 'link', icon: '↗', label: 'Link', hint: 'preview card (Maps, listing, Drive …)' },
+  { type: 'image', icon: '🖼', label: 'Images', hint: 'upload photos, gallery' },
+  { type: 'props', icon: '☷', label: 'Details', hint: 'table: price, size, location …' },
+  { type: 'callout', icon: '💡', label: 'Callout', hint: 'highlighted info box' },
+  { type: 'divider', icon: '—', label: 'Divider', hint: '' },
 ]
-const SECTION_SUGGESTIONS = ['🏝 Land', '🎨 Design', '🏗 Bau', '📄 Rechtliches', '💰 Finanzen', '📞 Kontakte']
-const LAND_KEYS = ['Preis', 'Größe', 'Lage', 'Zoning', 'Zufahrt', 'Kontakt']
+const SECTION_SUGGESTIONS = ['🏝 Land', '🎨 Design', '🏗 Construction', '📄 Legal', '💰 Finance', '📞 Contacts']
+const LAND_KEYS = ['Price', 'Size', 'Location', 'Zoning', 'Access', 'Contact']
 
 function defaultProps(type: BType): any {
   if (type === 'toggle') return { status: 'new' }
@@ -114,7 +114,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     const { data, error } = await supabase.from('workspace_blocks').insert(row).select().single()
     if (error) {
       if (/parent_id|props|column/i.test(error.message)) setNeedsSql(true)
-      else alert('Speichern fehlgeschlagen: ' + error.message)
+      else alert('Save failed: ' + error.message)
       return null
     }
     const b = { ...(data as Block), parent_id: data.parent_id ?? null, props: data.props || {} }
@@ -130,7 +130,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     setFocusId(b.id)
   }
   async function addLand(parentId: string | null) {
-    const t = await insert('toggle', parentId, { content: 'Neues Grundstück', props: { status: 'new' } })
+    const t = await insert('toggle', parentId, { content: 'New land plot', props: { status: 'new' } })
     if (!t) return
     setOpenState(t.id, true); if (parentId) setOpenState(parentId, true)
     await insert('props', t.id, { props: { rows: LAND_KEYS.map(k => ({ k, v: '' })) } })
@@ -153,7 +153,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
   }
   async function remove(b: Block) {
     const n = countDeep(b.id)
-    if ((b.type === 'section' || b.type === 'toggle' || n > 0) && !confirm(`„${b.content || 'Block'}“${n ? ` mit ${n} Unterpunkten` : ''} löschen?`)) return
+    if ((b.type === 'section' || b.type === 'toggle' || n > 0) && !confirm(`Delete "${b.content || 'block'}"${n ? ` and ${n} sub-items` : ''}?`)) return
     const doomed = new Set<string>([b.id])
     let grew = true
     while (grew) { grew = false; for (const x of blocks) if (x.parent_id && doomed.has(x.parent_id) && !doomed.has(x.id)) { doomed.add(x.id); grew = true } }
@@ -181,7 +181,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
       const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-60)
       const path = `${board.id}/${b.id}/${Date.now()}-${safe}`
       const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type, upsert: false })
-      if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload fehlgeschlagen: ' + error.message); continue }
+      if (error) { if (/bucket/i.test(error.message)) setNeedsSql(true); else alert('Upload failed: ' + error.message); continue }
       added.push(path)
     }
     if (!added.length) return
@@ -214,7 +214,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
         <div key={b.id} style={{ marginTop: depth === 0 ? 26 : 14 }}>
           <Row controls={controls}>
             <button onClick={() => setOpenState(b.id, !o)} style={chev(o, 18)}>▸</button>
-            <Inline value={b.content} placeholder="BEREICH" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
+            <Inline value={b.content} placeholder="SECTION" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
               style={{ fontFamily: SANS, fontSize: isMobile ? 20 : 24, fontWeight: 700, color: '#f4f9ff', letterSpacing: 0.2 }} />
             <span style={{ fontFamily: MONO, fontSize: 9.5, color: DIM, letterSpacing: 1.5, whiteSpace: 'nowrap' }}>{n} {n === 1 ? 'ITEM' : 'ITEMS'}</span>
             {mk}
@@ -223,7 +223,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
           {o && (
             <div style={{ paddingLeft: isMobile ? 8 : 30 }}>
               {kids(b.id).map(c => render(c, depth + 1))}
-              <AddMenu onPick={t => add(t, b.id)} exclude={['section']} label="+ Eintrag" />
+              <AddMenu onPick={t => add(t, b.id)} exclude={['section']} label="+ Entry" />
             </div>
           )}
         </div>
@@ -242,16 +242,16 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
         }}>
           <Row controls={controls} pad="6px 10px">
             <button onClick={() => setOpenState(b.id, !o)} style={chev(o, 14)}>▸</button>
-            <Inline value={b.content} placeholder="Neuer Eintrag" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
+            <Inline value={b.content} placeholder="New entry" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
               style={{ fontFamily: SANS, fontSize: 16, fontWeight: 600, color: '#eef6ff', textDecoration: st.key === 'rejected' ? 'line-through' : 'none' }} />
             {!o && n > 0 && <span style={{ fontFamily: MONO, fontSize: 9, color: DIM }}>{n}</span>}
-            <button onClick={cycle} title="Status ändern" style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 1.2, fontWeight: 700, padding: '3px 8px', borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap', color: st.color, background: `${st.color}18`, border: `1px solid ${st.color}55` }}>{st.label}</button>
+            <button onClick={cycle} title="Change status" style={{ fontFamily: MONO, fontSize: 9, letterSpacing: 1.2, fontWeight: 700, padding: '3px 8px', borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap', color: st.color, background: `${st.color}18`, border: `1px solid ${st.color}55` }}>{st.label}</button>
             {mk}
           </Row>
           {o && (
             <div style={{ margin: '0 10px 10px 22px', paddingLeft: 14, borderLeft: '1px solid rgba(120,190,255,0.16)' }}>
               {kids(b.id).map(c => render(c, depth + 1))}
-              <AddMenu onPick={t => add(t, b.id)} exclude={['section', 'template']} label="+ Inhalt" small />
+              <AddMenu onPick={t => add(t, b.id)} exclude={['section', 'template']} label="+ Content" small />
             </div>
           )}
         </div>
@@ -262,7 +262,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
 
     if (b.type === 'heading') return (
       <Row key={b.id} controls={controls}>
-        <Inline value={b.content} placeholder="Überschrift" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
+        <Inline value={b.content} placeholder="Heading" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })}
           style={{ fontFamily: SANS, fontSize: 15, fontWeight: 700, color: '#dbeafe', letterSpacing: 0.3, marginTop: 8 }} />
         {mk}
       </Row>
@@ -279,7 +279,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
     if (b.type === 'bullet') return (
       <Row key={b.id} controls={controls}>
         <span style={{ color: board.color, fontSize: 16, lineHeight: '26px', width: 12, flexShrink: 0 }}>•</span>
-        <Area value={b.content} placeholder="Listenpunkt" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })} />
+        <Area value={b.content} placeholder="List item" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })} />
         {mk}
       </Row>
     )
@@ -288,7 +288,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
       <Row key={b.id} controls={controls}>
         <div style={{ flex: 1, display: 'flex', gap: 10, padding: '10px 14px', borderRadius: 10, background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.22)' }}>
           <span style={{ fontSize: 16, lineHeight: '26px' }}>{b.props?.emoji || '💡'}</span>
-          <Area value={b.content} placeholder="Wichtiger Hinweis…" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })} />
+          <Area value={b.content} placeholder="Important note…" autoFocus={focusId === b.id} onSave={v => update(b.id, { content: v })} />
         </div>
         {mk}
       </Row>
@@ -341,15 +341,15 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
       <div style={{ maxWidth: 920, margin: '0 auto', padding: isMobile ? '10px 14px 120px' : '18px 32px 160px' }}>
         {needsSql && (
           <div style={{ margin: '14px 0', padding: '12px 14px', borderRadius: 10, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: '#ffe6a8', fontSize: 13 }}>
-            Für Bereiche, Toggles und Bilder bitte einmal <b>lib/sql/thinkspace_v2.sql</b> in Supabase ausführen.
+            To enable sections, toggles and images, run <b>lib/sql/thinkspace_v2.sql</b> once in Supabase.
           </div>
         )}
         {loading ? <div style={{ fontFamily: MONO, fontSize: 11, color: DIM, padding: 40, textAlign: 'center' }}>Loading…</div> : (
           <>
             {top.length === 0 && (
               <div style={{ padding: '40px 0 10px' }}>
-                <div style={{ fontSize: 18, color: '#eef6ff', fontWeight: 600 }}>Leeres Board — womit fangt ihr an?</div>
-                <div style={{ fontSize: 13, color: DIM, marginTop: 6 }}>Lege Bereiche an, darin aufklappbare Einträge mit Links, Bildern und Details.</div>
+                <div style={{ fontSize: 18, color: '#eef6ff', fontWeight: 600 }}>Empty board — where do you start?</div>
+                <div style={{ fontSize: 13, color: DIM, marginTop: 6 }}>Create sections, then collapsible entries with links, images and details.</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
                   {SECTION_SUGGESTIONS.map(s => <button key={s} onClick={() => addSection(s)} style={suggBtn}>{s}</button>)}
                 </div>
@@ -357,7 +357,7 @@ export default function BoardEditor({ board, supabase, onBack }: { board: Board;
             )}
             {top.map(b => render(b, 0))}
             <div style={{ marginTop: 22 }}>
-              <AddMenu onPick={t => add(t, null)} label="+ Block / Bereich" />
+              <AddMenu onPick={t => add(t, null)} label="+ Block / Section" />
             </div>
           </>
         )}
@@ -381,9 +381,9 @@ function Row({ children, controls, pad }: { children: React.ReactNode; controls:
 function Controls({ onUp, onDown, onDelete }: { onUp: () => void; onDown: () => void; onDelete: () => void }) {
   const s: React.CSSProperties = { background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(160,200,240,0.55)', fontSize: 11, padding: '3px 4px', lineHeight: 1 }
   return (<>
-    <button onClick={onUp} title="nach oben" style={s}>↑</button>
-    <button onClick={onDown} title="nach unten" style={s}>↓</button>
-    <button onClick={onDelete} title="löschen" style={{ ...s, color: 'rgba(248,113,113,0.6)' }}>✕</button>
+    <button onClick={onUp} title="move up" style={s}>↑</button>
+    <button onClick={onDown} title="move down" style={s}>↓</button>
+    <button onClick={onDelete} title="delete" style={{ ...s, color: 'rgba(248,113,113,0.6)' }}>✕</button>
   </>)
 }
 const chev = (open: boolean, size: number): React.CSSProperties => ({
@@ -454,7 +454,7 @@ function LinkBlock({ block, supabase, onSave, autoFocus }: { block: Block; supab
   }
   if (edit) return (
     <input value={url} autoFocus={autoFocus} onChange={e => setUrl(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-      placeholder="Link einfügen — Google Maps, Listing, Drive, Instagram …"
+      placeholder="Paste a link — Google Maps, listing, Drive, Instagram …"
       style={{ flex: 1, background: 'rgba(4,12,30,0.6)', border: '1px dashed rgba(120,190,255,0.3)', borderRadius: 10, padding: '10px 12px', outline: 'none', color: '#e6f2ff', fontSize: 13.5, fontFamily: SANS }} />
   )
   const site = p?.site || (() => { try { return new URL(block.props.url).hostname.replace(/^www\./, '') } catch { return '' } })()
@@ -463,14 +463,14 @@ function LinkBlock({ block, supabase, onSave, autoFocus }: { block: Block; supab
       <a href={block.props.url} target="_blank" rel="noreferrer" style={{ flex: 1, minWidth: 0, display: 'flex', gap: 12, textDecoration: 'none', padding: 12 }}>
         {p?.image && <img src={p.image} alt="" style={{ width: 110, height: 72, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} onError={e => ((e.target as HTMLImageElement).style.display = 'none')} />}
         <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: '#eef6ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{busy ? 'Lade Vorschau…' : (p?.title || block.props.url)}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#eef6ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{busy ? 'Loading preview…' : (p?.title || block.props.url)}</span>
           {p?.description && <span style={{ fontSize: 12, color: DIM, marginTop: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</span>}
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5, fontFamily: MONO, fontSize: 9.5, color: '#9fd4ff' }}>
             <img src={`https://www.google.com/s2/favicons?domain=${site}&sz=32`} alt="" style={{ width: 13, height: 13, borderRadius: 3 }} />{site} ↗
           </span>
         </span>
       </a>
-      <button onClick={() => setEdit(true)} title="Link ändern" style={{ background: 'transparent', border: 'none', borderLeft: '1px solid rgba(120,190,255,0.12)', color: DIM, cursor: 'pointer', padding: '0 12px', fontSize: 12 }}>✎</button>
+      <button onClick={() => setEdit(true)} title="Edit link" style={{ background: 'transparent', border: 'none', borderLeft: '1px solid rgba(120,190,255,0.12)', color: DIM, cursor: 'pointer', padding: '0 12px', fontSize: 12 }}>✎</button>
     </div>
   )
 }
@@ -488,12 +488,12 @@ function ImageBlock({ block, urls, onUpload, onRemove, onOpen }: { block: Block;
         {paths.map((p, i) => (
           <div key={p} className="ts-img" style={{ position: 'relative', aspectRatio: '4 / 3', borderRadius: 10, overflow: 'hidden', background: 'rgba(10,24,54,0.6)', border: '1px solid rgba(120,190,255,0.15)', cursor: 'zoom-in' }} onClick={() => onOpen(i)}>
             {urls[p] ? <img src={urls[p]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: MONO, fontSize: 9, color: DIM }}>…</span>}
-            <button onClick={e => { e.stopPropagation(); if (confirm('Bild entfernen?')) onRemove(p) }} className="ts-img-x" style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11 }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); if (confirm('Remove this image?')) onRemove(p) }} className="ts-img-x" style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 6, border: 'none', cursor: 'pointer', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 11 }}>✕</button>
           </div>
         ))}
         <button onClick={() => input.current?.click()} style={{ aspectRatio: '4 / 3', borderRadius: 10, cursor: 'pointer', background: 'rgba(80,180,255,0.04)', border: '1px dashed rgba(120,190,255,0.3)', color: 'rgba(160,205,250,0.75)', fontFamily: MONO, fontSize: 10, letterSpacing: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <span style={{ fontSize: 20 }}>{busy ? '◌' : '🖼'}</span>{busy ? 'LÄDT HOCH…' : paths.length ? '+ MEHR' : 'BILDER HOCHLADEN'}
-          {!paths.length && !busy && <span style={{ fontSize: 8.5, color: DIM, letterSpacing: 0.5 }}>oder hierher ziehen</span>}
+          <span style={{ fontSize: 20 }}>{busy ? '◌' : '🖼'}</span>{busy ? 'UPLOADING…' : paths.length ? '+ MORE' : 'UPLOAD IMAGES'}
+          {!paths.length && !busy && <span style={{ fontSize: 8.5, color: DIM, letterSpacing: 0.5 }}>or drag & drop here</span>}
         </button>
       </div>
       <input ref={input} type="file" accept="image/*" multiple hidden onChange={e => { if (e.target.files) up(e.target.files); e.target.value = '' }} />
@@ -511,13 +511,13 @@ function PropsBlock({ rows, color, onSave }: { rows: { k: string; v: string }[];
     <div style={{ flex: 1, borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(120,190,255,0.16)', background: 'rgba(8,20,46,0.5)' }}>
       {r.map((row, i) => (
         <div key={i} className="ts-prop" style={{ display: 'grid', gridTemplateColumns: 'minmax(90px, 160px) 1fr 28px', borderTop: i ? '1px solid rgba(120,190,255,0.08)' : 'none' }}>
-          <input value={row.k} placeholder="Feld" onChange={e => setR(r.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} onBlur={() => onSave(r)}
+          <input value={row.k} placeholder="Field" onChange={e => setR(r.map((x, j) => j === i ? { ...x, k: e.target.value } : x))} onBlur={() => onSave(r)}
             style={{ ...cell, color, fontFamily: MONO, fontSize: 10.5, letterSpacing: 1, textTransform: 'uppercase', borderRight: '1px solid rgba(120,190,255,0.08)' }} />
           <input value={row.v} placeholder="—" onChange={e => setR(r.map((x, j) => j === i ? { ...x, v: e.target.value } : x))} onBlur={() => onSave(r)} style={{ ...cell, color: '#eef6ff' }} />
           <button onClick={() => commit(r.filter((_, j) => j !== i))} className="ts-prop-x" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(248,113,113,0.6)', fontSize: 10 }}>✕</button>
         </div>
       ))}
-      <button onClick={() => commit([...r, { k: '', v: '' }])} style={{ width: '100%', textAlign: 'left', padding: '7px 10px', background: 'transparent', border: 'none', borderTop: '1px solid rgba(120,190,255,0.08)', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1, color: DIM }}>+ FELD</button>
+      <button onClick={() => commit([...r, { k: '', v: '' }])} style={{ width: '100%', textAlign: 'left', padding: '7px 10px', background: 'transparent', border: 'none', borderTop: '1px solid rgba(120,190,255,0.08)', cursor: 'pointer', fontFamily: MONO, fontSize: 9.5, letterSpacing: 1, color: DIM }}>+ FIELD</button>
       <style>{`.ts-prop .ts-prop-x { opacity: 0 } .ts-prop:hover .ts-prop-x { opacity: 1 }`}</style>
     </div>
   )

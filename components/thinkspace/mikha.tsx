@@ -4,7 +4,7 @@ export const isMikha = (id?: string | null) => !!id && id !== LEON_ID
 
 export function MBadge({ edited, count }: { edited?: boolean; count?: number }) {
   return (
-    <span title={edited ? 'von Mikha geändert' : 'von Mikha geschrieben'} style={{
+    <span title={edited ? 'edited by Mikha' : 'written by Mikha'} style={{
       display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0, alignSelf: 'center',
       fontFamily: 'Space Mono, monospace', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5,
       color: '#ff5fb7', padding: '1px 6px', borderRadius: 6, marginLeft: 6,
