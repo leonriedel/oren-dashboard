@@ -20,6 +20,7 @@ async function auth(req: Request) {
   const { data } = await supa.auth.getUser(token)
   if (!data?.user) return null
   const isAdmin = (data.user.app_metadata?.role || data.user.user_metadata?.role) === 'admin'
+  if (!isAdmin) return null   // SecondBrain is Leon-only
   return { supa, user: data.user, isAdmin }
 }
 

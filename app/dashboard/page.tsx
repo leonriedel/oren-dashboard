@@ -142,7 +142,7 @@ export default function Dashboard() {
   if (!user) return null
 
   // Role guards: viewer may not open edgar/investments
-  if ((screen === 'edgar' || screen === 'invest') && !isAdmin) {
+  if ((screen === 'edgar' || screen === 'invest' || screen === 'brain') && !isAdmin) {
     setScreen('home'); return null
   }
 
@@ -160,7 +160,7 @@ export default function Dashboard() {
                    : 'STANDBY'
 
   const modules = [
-    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: false },
+    { id: 'brain',   key: '01', label: 'SECONDBRAIN', sub: 'Daily Command Center', locked: !isAdmin },
     { id: 'think',   key: '02', label: 'THINKSPACE',  sub: 'Shared Notes & Boards',locked: false },
     { id: 'radar',   key: '03', label: 'RADAR AI',  sub: 'Market Intelligence',  locked: !isAdmin },
     { id: 'finance', key: '04', label: 'FINANCE',     sub: 'Networth · Portfolio · Returns', locked: !isAdmin },
@@ -342,7 +342,7 @@ export default function Dashboard() {
                   <DataRow key={p.id} idx={String(i + 1).padStart(2, '0')} text={p.text} idxColor="#ffd060" />
                 ))
               )}
-              <button onClick={() => setScreen('brain')} style={btnSecondary}>OPEN SECONDBRAIN →</button>
+              {isAdmin && <button onClick={() => setScreen('brain')} style={btnSecondary}>OPEN SECONDBRAIN →</button>}
             </HUDPanel>
 
             <HUDPanel title="▲ GOALS" subtitle="WEEKLY">

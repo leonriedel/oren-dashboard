@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   const user = u?.user
   if (!user) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   const isAdmin = (user.app_metadata?.role || user.user_metadata?.role) === 'admin'
+  if (!isAdmin) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const { text, today } = await req.json().catch(() => ({ text: '' }))
   const raw = String(text || '').trim()
