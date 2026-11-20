@@ -9,6 +9,7 @@ EDGAR BOUNCE · config  (long-only Bollinger-bounce trading on a separate IBKR a
   IBKR_CLIENT_ID         default 17
   EDGAR_LIVE             "true" to send real orders; anything else = dry run (logs what it WOULD do)
   EDGAR_BUDGET_EUR       optional hard cap on capital Edgar may use (default: whole Edgar account)
+  EDGAR_MAX_OPEN         max positions at once (default 5; use 3 for accounts under ~$2,000)
 """
 from __future__ import annotations
 import os
@@ -46,7 +47,7 @@ STOP_ATR       = 3.0       # disaster stop (GTC at IBKR) = signal close − 3×A
 ENTRY_GAP_MAX  = 0.03      # limit-on-open: skip if the stock opens > 3% above the signal close
 
 # ─── risk (hard limits) ───
-MAX_OPEN         = 5       # equal slots: each position ≈ 1/5 of Edgar capital
+MAX_OPEN         = int(os.getenv("EDGAR_MAX_OPEN", "5"))   # equal slots: each position ≈ 1/MAX_OPEN of Edgar capital (small account → 3)
 MAX_NEW_PER_DAY  = 5
 MAX_DRAWDOWN_HALT = 0.20   # Edgar stops opening trades if his capital is 20% below its high-water mark
 
