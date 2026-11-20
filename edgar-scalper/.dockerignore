@@ -3,3 +3,7 @@
 __pycache__
 *.pyc
 backtest_*.csv
+deploy/gateway.env
+deploy/state
+edgar_state.json
+.bars_cache.pkl

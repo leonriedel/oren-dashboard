@@ -10,3 +10,5 @@ edgar-scalper/.venv/
 edgar-scalper/.env
 edgar-scalper/edgar_state.json
 edgar-scalper/.bars_cache.pkl
+edgar-scalper/deploy/gateway.env
+edgar-scalper/deploy/state/

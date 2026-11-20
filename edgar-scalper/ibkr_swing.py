@@ -29,7 +29,7 @@ import swing_data
 import bounce_strategy as strat
 import journal
 
-STATE_FILE = os.path.join(os.path.dirname(__file__), "edgar_state.json")
+STATE_FILE = os.getenv("EDGAR_STATE_FILE") or os.path.join(os.path.dirname(__file__), "edgar_state.json")
 NY = ZoneInfo("America/New_York")
 
 
@@ -74,7 +74,17 @@ class Broker:
             return
         if not self.acct:
             raise RuntimeError("IBKR_ACCOUNT missing in .env (the Edgar account id, e.g. U1234567)")
-        self.ib.connect(cfg.IBKR_HOST, cfg.IBKR_PORT, clientId=cfg.IBKR_CLIENT, readonly=not cfg.LIVE, timeout=15)
+        ports = [cfg.IBKR_PORT] + [int(p) for p in os.getenv("IBKR_PORT_FALLBACK", "").split(",") if p.strip().isdigit()]
+        last = None
+        for port in ports:
+            try:
+                self.ib.connect(cfg.IBKR_HOST, port, clientId=cfg.IBKR_CLIENT, readonly=not cfg.LIVE, timeout=15)
+                break
+            except Exception as e:
+                last = e
+                print(f"[ibkr] {cfg.IBKR_HOST}:{port} not reachable ({e})")
+        if not self.ib.isConnected():
+            raise RuntimeError(f"IB Gateway not reachable on {cfg.IBKR_HOST} ports {ports}: {last}")
         accts = self.ib.managedAccounts()
         if self.acct not in accts:
             self.ib.disconnect()

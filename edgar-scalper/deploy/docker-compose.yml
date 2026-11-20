@@ -1,0 +1,36 @@
+# EDGAR on a cloud server: IB Gateway (headless, auto-login via IBC) + Edgar Bounce
+#   cd ~/oren-dashboard/edgar-scalper/deploy && docker compose up -d --build
+services:
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: unless-stopped
+    env_file: gateway.env            # TWS_USERID / TWS_PASSWORD of the EDGAR user (never commit this file)
+    environment:
+      TRADING_MODE: live
+      READ_ONLY_API: "no"
+      TWOFA_TIMEOUT_ACTION: restart   # keeps asking for the IBKR-app confirmation until you tap it
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      RELOGIN_AFTER_2FA_TIMEOUT: "yes"    # (name differs between image versions — both set)
+      AUTO_RESTART_TIME: "11:45 PM"   # daily soft restart (no 2FA needed until the weekly re-login)
+      TIME_ZONE: America/New_York
+      TZ: America/New_York
+    ports:
+      - "127.0.0.1:5900:5900"         # VNC, only via SSH tunnel (to look at the gateway if ever needed)
+    # API port is NOT published: only the edgar container can reach it
+
+  edgar:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.edgar
+    restart: unless-stopped
+    depends_on: [ib-gateway]
+    env_file: ../.env                 # same .env as on the Mac (IBKR_ACCOUNT, POLYGON_API_KEY, SUPABASE_*, EDGAR_LIVE …)
+    environment:
+      IBKR_HOST: ib-gateway
+      IBKR_PORT: "4003"               # live API inside the docker network (image relays 4001 → 4003)
+      IBKR_PORT_FALLBACK: "4001"      # older image versions listen on 4001 directly
+      EDGAR_STATE_FILE: /app/state/edgar_state.json
+      TZ: America/New_York
+    volumes:
+      - ./state:/app/state
+    command: ["python", "run_swing.py"]
