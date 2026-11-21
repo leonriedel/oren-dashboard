@@ -1,8 +1,8 @@
 """
-EDGAR · SCALPER LAB — honest re-test of the Capital.com scalper (and a short-only "Waldemar")
+WALDEMAR · SCALPER LAB — honest re-test of the Capital.com scalper (Waldemar), long vs short
 
-  docker compose run --rm --no-deps edgar python scalper_lab.py          # on the server (has the Massive key)
-  ~/edgar-venv/bin/python scalper_lab.py                                  # or on the OREN Mac
+  docker compose run --rm --no-deps edgar python waldemar_lab.py          # on the server (has the Massive key)
+  ~/edgar-venv/bin/python waldemar_lab.py                                  # or on the OREN Mac
 
 Same signals as the live scalper (signal_engine/backtest.py): 15-min bars, Bollinger(20,2) + RSI(14) extremes,
 stop 1.5×ATR, target 3×ATR. Differences vs the old backtest.py:
@@ -103,7 +103,7 @@ def line(label: str, t: list[dict], mid) -> str:
 def main():
     if not KEY:
         sys.exit("POLYGON_API_KEY missing in .env")
-    print(f"\nSCALPER LAB · 15-min · BB({config.BB_PERIOD},{config.BB_STD}) + RSI({config.RSI_PERIOD}) {config.RSI_OVERSOLD}/{config.RSI_OVERBOUGHT} · "
+    print(f"\nWALDEMAR · SCALPER LAB · 15-min · BB({config.BB_PERIOD},{config.BB_STD}) + RSI({config.RSI_PERIOD}) {config.RSI_OVERSOLD}/{config.RSI_OVERBOUGHT} · "
           f"stop {config.SL_ATR_MULT}×ATR · target {config.TP_ATR_MULT}×ATR · last {DAYS} days · loading data (~1 min)…")
     hdr = f"{'market / side':28} {'trades':>5} {'win':>5} {'PF':>5} {'avg R':>6} {'total R':>8} {'1st½':>7} {'2nd½':>7} {'2×spread':>8}"
     rows, allt = [], []
@@ -121,7 +121,7 @@ def main():
         rows.append(f"{name}  ({len(df):,} bars, {str(df.index[0])[:10]} → {str(df.index[-1])[:10]}, spread {spread})")
         rows.append(line("  both directions", t, mid))
         rows.append(line("  LONG only", [x for x in t if x["side"] == "LONG"], mid))
-        rows.append(line("  SHORT only (Waldemar)", [x for x in t if x["side"] == "SHORT"], mid))
+        rows.append(line("  SHORT only", [x for x in t if x["side"] == "SHORT"], mid))
     print("\n" + hdr + "\n" + "─" * len(hdr))
     for r in rows:
         print(r)
