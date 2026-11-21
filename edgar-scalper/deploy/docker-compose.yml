@@ -34,3 +34,16 @@ services:
     volumes:
       - ./state:/app/state
     command: ["python", "run_swing.py"]
+
+  waldemar:                           # crypto trend bot (BTC + ETH above MA50, real coins on Bitvavo)
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.edgar
+    restart: unless-stopped
+    env_file: ../.env                 # WALDEMAR_API_KEY / WALDEMAR_API_SECRET / WALDEMAR_LIVE / WALDEMAR_BUDGET_EUR
+    environment:
+      EDGAR_STATE_FILE: /app/state/edgar_state.json   # (only used to find the state folder)
+      TZ: UTC
+    volumes:
+      - ./state:/app/state
+    command: ["python", "waldemar_bot.py"]
