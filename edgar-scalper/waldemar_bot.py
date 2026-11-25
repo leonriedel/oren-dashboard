@@ -189,6 +189,7 @@ def report(ex, state: dict) -> None:
             "day": now.date().isoformat(), "ts": now.isoformat(), "equity": round(equity, 2), "eur": round(eur, 2),
             "crypto": round(crypto, 2), "net_deposits": dep, "btc": prices.get("BTC/EUR"), "eth": prices.get("ETH/EUR"),
         }).execute()
+        log(f"reported to riedel.ai · equity €{equity:,.2f}" + ("" if dep is None else f" · net deposits €{dep:,.2f}"))
     except Exception as e:
         log(f"supabase report failed: {e}")
 
@@ -203,6 +204,10 @@ def main() -> None:
         + (f" · budget €{BUDGET:,.0f}" if BUDGET else ""))
     if not KEY or not SECRET:
         log("WALDEMAR_API_KEY / WALDEMAR_API_SECRET missing in .env"); sys.exit(1)
+    sb = supa()
+    why = ("supabase library missing" if not create_client else
+           "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing in .env" if not (SUPA_URL and SUPA_KEY) else "client could not be created")
+    log("dashboard reporting: ON" if sb else f"dashboard reporting: OFF — {why}")
     once = "--once" in sys.argv
     while True:
         state = load_state()
