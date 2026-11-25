@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Stats = {
   totalPnl: number
@@ -21,8 +22,8 @@ export default function EquityStrip() {
   useEffect(() => {
     const load = async () => {
       const [t, e] = await Promise.all([
-        fetch('/api/edgar/scalper/trades?limit=100').then(r => r.json()).catch(() => ({})),
-        fetch('/api/edgar/scalper/equity?days=1').then(r => r.json()).catch(() => ({})),
+        authFetch('/api/edgar/scalper/trades?limit=100').then(r => r.json()).catch(() => ({})),
+        authFetch('/api/edgar/scalper/equity?days=1').then(r => r.json()).catch(() => ({})),
       ])
       setStats(t.stats || null)
       setEquity(e.equity || [])

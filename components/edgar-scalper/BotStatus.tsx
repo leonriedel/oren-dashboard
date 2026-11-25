@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Status = {
   alive: boolean
@@ -16,7 +17,7 @@ export default function BotStatus() {
 
   useEffect(() => {
     const load = async () => {
-      const r = await fetch('/api/edgar/scalper/status').then(r => r.json()).catch(() => null)
+      const r = await authFetch('/api/edgar/scalper/status').then(r => r.json()).catch(() => null)
       setS(r)
     }
     load()

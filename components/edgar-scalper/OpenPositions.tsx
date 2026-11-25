@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Trade = {
   id: string
@@ -19,7 +20,7 @@ export default function OpenPositions() {
 
   useEffect(() => {
     const load = async () => {
-      const r = await fetch('/api/edgar/scalper/positions').then(r => r.json()).catch(() => ({}))
+      const r = await authFetch('/api/edgar/scalper/positions').then(r => r.json()).catch(() => ({}))
       setPositions(r.positions || [])
       setLoading(false)
     }

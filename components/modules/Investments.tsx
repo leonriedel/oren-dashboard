@@ -5,6 +5,7 @@ import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { authFetch } from '@/lib/authFetch'
 
 interface Props { user: User; onBack: () => void }
 
@@ -32,7 +33,7 @@ export default function Investments({ user, onBack }: Props) {
 
   useEffect(() => {
     load()
-    fetch('/api/edgar').then(r => r.json()).then(setEdgar).catch(() => {})
+    authFetch('/api/edgar').then(r => r.json()).then(setEdgar).catch(() => {})
   }, [])
 
   async function load() {

@@ -4,6 +4,7 @@ import ModuleLayout from '@/components/ModuleLayout'
 import { Card, SectionTitle, ItemRow, MetricGrid } from '@/components/UI'
 import type { User } from '@supabase/supabase-js'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { authFetch } from '@/lib/authFetch'
 
 interface Props { user: User; onBack: () => void }
 
@@ -40,7 +41,7 @@ export default function Edgar({ user, onBack }: Props) {
 
   useEffect(() => {
     const load = () => {
-      fetch('/api/edgar')
+      authFetch('/api/edgar')
         .then(r => r.json())
         .then(d => { setData(d); setLoading(false) })
         .catch(() => setLoading(false))

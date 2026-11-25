@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Item = {
   id: string
@@ -34,7 +35,7 @@ export default function CategorySection({ category, grandTotal, userId, onChange
 
   const addItem = async () => {
     if (!draft.name) return
-    await fetch('/api/finance/items', {
+    await authFetch('/api/finance/items', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ...draft, category: category.name, user_id: userId }),
@@ -43,7 +44,7 @@ export default function CategorySection({ category, grandTotal, userId, onChange
   }
 
   const saveItem = async (id: string) => {
-    await fetch('/api/finance/items', {
+    await authFetch('/api/finance/items', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id, ...draft }),
@@ -53,13 +54,13 @@ export default function CategorySection({ category, grandTotal, userId, onChange
 
   const delItem = async (id: string) => {
     if (!confirm('Delete this item?')) return
-    await fetch(`/api/finance/items?id=${id}`, { method: 'DELETE' })
+    await authFetch(`/api/finance/items?id=${id}`, { method: 'DELETE' })
     onChange()
   }
 
   const delCategory = async () => {
     if (!confirm(`Delete category "${category.name}" and all its items?`)) return
-    await fetch(`/api/finance/categories?id=${category.id}`, { method: 'DELETE' })
+    await authFetch(`/api/finance/categories?id=${category.id}`, { method: 'DELETE' })
     onChange()
   }
 

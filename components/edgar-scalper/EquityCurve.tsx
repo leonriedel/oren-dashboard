@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Point = { ts: string; nav: number }
 
@@ -9,7 +10,7 @@ export default function EquityCurve() {
 
   useEffect(() => {
     const load = async () => {
-      const r = await fetch('/api/edgar/scalper/equity?days=7').then(r => r.json()).catch(() => ({}))
+      const r = await authFetch('/api/edgar/scalper/equity?days=7').then(r => r.json()).catch(() => ({}))
       setPoints((r.equity || []).map((e: any) => ({ ts: e.ts, nav: e.nav })))
       setLoading(false)
     }

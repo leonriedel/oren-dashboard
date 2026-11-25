@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Point = {
   ts: string
@@ -15,7 +16,7 @@ export default function EquityTrend({ currentTotal }: { currentTotal: number }) 
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/finance/snapshots?days=90')
+    authFetch('/api/finance/snapshots?days=90')
       .then(r => r.json())
       .then(d => setPoints(d.snapshots || []))
       .finally(() => setLoading(false))

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { XMLParser } from 'fast-xml-parser'
+import { adminOnly } from '@/lib/apiAuth'
 
 // IBKR Flex Query Web Service
 // Flow: SendRequest(token, queryId) → ReferenceCode → GetStatement(token, ref) → XML data
@@ -93,7 +94,8 @@ async function enrichDailyPnl(positions: any[]) {
   })
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = await adminOnly(req); if (denied) return denied
   try {
     if (!TOKEN || !QUERY_ID) {
       return NextResponse.json({

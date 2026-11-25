@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { adminOnly } from '@/lib/apiAuth'
+import { waldemarSummary } from '@/lib/waldemar'
 
 // FINANCE SUMMARY v2
 // Aggregates everything into one view:
@@ -26,14 +28,15 @@ async function usdToEur(): Promise<number> {
   return _fx.usd_eur
 }
 
-async function fetchJSON(url: string) {
+async function fetchJSON(url: string, auth = '') {
   try {
-    const r = await fetch(url, { cache: 'no-store' })
+    const r = await fetch(url, { cache: 'no-store', headers: auth ? { authorization: auth } : {} })
     return await r.json()
   } catch { return null }
 }
 
 export async function GET(req: Request) {
+  const denied = await adminOnly(req); if (denied) return denied
   try {
     const u = new URL(req.url)
     const origin = u.origin
@@ -53,7 +56,7 @@ export async function GET(req: Request) {
     // 2. IBKR
     let ibkr = { total_eur: 0, dailyPnl_eur: 0, positions: 0, currency: 'EUR', available: false }
     try {
-      const j = await fetchJSON(`${origin}/api/ibkr/flex`)
+      const j = await fetchJSON(`${origin}/api/ibkr/flex`, req.headers.get('authorization') || '')
       if (j && !j.error) {
         const total = Number(j?.account?.total) || 0
         const currency = j?.account?.currency || 'EUR'
@@ -84,6 +87,18 @@ export async function GET(req: Request) {
       }
     } catch { /* table may not exist */ }
 
+    // 3b. WALDEMAR (crypto trend bot, EUR)
+    let waldemar = { equity_eur: 0, today_eur: 0, month_eur: 0, total_pnl_eur: 0, live: false, stale: false, available: false }
+    try {
+      const w: any = await waldemarSummary(supa)
+      if (w?.available) {
+        waldemar = {
+          equity_eur: Number(w.status.equity) || 0, today_eur: w.todayPnl || 0, month_eur: w.monthPnl || 0,
+          total_pnl_eur: w.totalPnl || 0, live: !!w.status.live, stale: !!w.stale, available: true,
+        }
+      }
+    } catch { /* tables may not exist yet */ }
+
     // 4. REAL ESTATE
     let realEstate = { total_eur: 0, projects: 0 }
     try {
@@ -113,7 +128,7 @@ export async function GET(req: Request) {
     const userYearlyTotal   = (items || []).reduce((s, i: any) => s + Number(i.yearly_return || 0), 0)
 
     // Live sources totals
-    const liveTotal = ibkr.total_eur + edgar.nav_eur + realEstate.total_eur
+    const liveTotal = ibkr.total_eur + edgar.nav_eur + waldemar.equity_eur + realEstate.total_eur
 
     // Grand total: user-tracked items + live auto-pulled
     const total = userCurrentTotal + liveTotal
@@ -128,7 +143,7 @@ export async function GET(req: Request) {
       },
       live_sources: {
         total: liveTotal,
-        ibkr, edgar, realEstate,
+        ibkr, edgar, waldemar, realEstate,
       },
       categories,
       fx: { usd_eur: fx, ts: _fx.ts },
@@ -141,10 +156,11 @@ export async function GET(req: Request) {
 
 // POST: snapshot
 export async function POST(req: Request) {
+  const denied = await adminOnly(req); if (denied) return denied
   try {
     const supa = createClient(SUPA_URL, KEY)
     const u = new URL(req.url)
-    const originRes = await fetch(`${u.origin}/api/finance/summary`, { cache: 'no-store' })
+    const originRes = await fetch(`${u.origin}/api/finance/summary`, { cache: 'no-store', headers: { authorization: req.headers.get('authorization') || '' } })
     const j = await originRes.json()
     if (!j?.total_eur && j?.total_eur !== 0) return NextResponse.json({ ok: false, error: 'no summary' }, { status: 200 })
 
@@ -154,7 +170,7 @@ export async function POST(req: Request) {
       liquid_eur: 0,  // schema compat
       investments_eur: j.user_tracked?.current || 0,
       physical_eur: j.live_sources?.realEstate?.total_eur || 0,
-      other_eur: (j.live_sources?.ibkr?.total_eur || 0) + (j.live_sources?.edgar?.nav_eur || 0),
+      other_eur: (j.live_sources?.ibkr?.total_eur || 0) + (j.live_sources?.edgar?.nav_eur || 0) + (j.live_sources?.waldemar?.equity_eur || 0),
       breakdown: j,
     }
     const { error } = await supa.from('finance_snapshots').insert(row)

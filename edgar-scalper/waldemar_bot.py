@@ -25,6 +25,11 @@ from datetime import datetime, timezone
 
 import ccxt
 
+try:
+    from supabase import create_client
+except Exception:          # reporting is optional
+    create_client = None
+
 EXCHANGE = os.getenv("WALDEMAR_EXCHANGE", "bitvavo").lower()
 KEY, SECRET = os.getenv("WALDEMAR_API_KEY", ""), os.getenv("WALDEMAR_API_SECRET", "")
 LIVE = os.getenv("WALDEMAR_LIVE", "false").lower() == "true"
@@ -36,6 +41,20 @@ REBALANCE_BAND = 0.15          # only top up a held coin if it is >15 % below it
 RUN_AFTER_UTC = (0, 10)        # daily cycle after 00:10 UTC (= 08:10 Bali)
 STATE_DIR = os.path.dirname(os.getenv("EDGAR_STATE_FILE", "")) or os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(STATE_DIR, "waldemar_state.json")
+SUPA_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL") or ""
+SUPA_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or ""
+_supa = None
+
+
+def supa():
+    """Supabase client for the riedel.ai dashboard (tables from lib/sql/waldemar.sql). None if not configured."""
+    global _supa
+    if _supa is None and create_client and SUPA_URL and SUPA_KEY:
+        try:
+            _supa = create_client(SUPA_URL, SUPA_KEY)
+        except Exception as e:
+            log(f"supabase off: {e}")
+    return _supa
 
 
 def log(msg: str) -> None:
@@ -98,17 +117,80 @@ def cycle(ex, state: dict) -> None:
                 amount = float(ex.amount_to_precision(p, spend / prices[p]))
                 action = f"BUY {amount} {base} (≈€{spend:,.2f})"
                 if LIVE and amount > 0:
-                    ex.create_order(p, "market", "buy", amount)
+                    order = ex.create_order(p, "market", "buy", amount)
                     eur -= spend
+                    record_trade(p, "buy", amount, prices[p], order, f"close {close:,.2f} > MA{MA} {ma:,.2f}")
         elif not up and value >= MIN_ORDER_EUR:
             free = float(bal.get(base, {}).get("free") or 0)
             amount = float(ex.amount_to_precision(p, free))
             action = f"SELL {amount} {base} (≈€{amount * prices[p]:,.2f})"
             if LIVE and amount > 0:
-                ex.create_order(p, "market", "sell", amount)
+                order = ex.create_order(p, "market", "sell", amount)
+                record_trade(p, "sell", amount, prices[p], order, f"close {close:,.2f} <= MA{MA} {ma:,.2f}")
         log(f"{state_txt} · {action}")
         record["pairs"][p] = {"close": close, "ma": ma, "up": up, "value": round(value, 2), "action": action}
     state.setdefault("history", []).append(record)
+
+
+def record_trade(pair: str, side: str, amount: float, price: float, order: dict | None, reason: str) -> None:
+    sb = supa()
+    if not sb:
+        return
+    try:
+        o = order or {}
+        px = float(o.get("average") or o.get("price") or price)
+        amt = float(o.get("filled") or amount)
+        fee = (o.get("fee") or {}) if isinstance(o.get("fee"), dict) else {}
+        sb.table("waldemar_trades").insert({
+            "pair": pair, "side": side, "amount": amt, "price": px, "value_eur": float(o.get("cost") or amt * px),
+            "fee_eur": float(fee.get("cost")) if fee.get("currency") == "EUR" and fee.get("cost") is not None else None,
+            "order_id": str(o.get("id") or ""), "reason": reason, "live": LIVE,
+        }).execute()
+    except Exception as e:
+        log(f"supabase trade log failed: {e}")
+
+
+def net_deposits(ex) -> float | None:
+    """EUR deposited minus EUR withdrawn on the exchange (so P&L is not confused with new money)."""
+    try:
+        dep = sum(float(x.get("amount") or 0) for x in ex.fetch_deposits("EUR") if x.get("status") in (None, "ok"))
+        wd = sum(float(x.get("amount") or 0) for x in ex.fetch_withdrawals("EUR") if x.get("status") in (None, "ok"))
+        return dep - wd
+    except Exception:
+        return None
+
+
+def report(ex, state: dict) -> None:
+    """Every loop: live status + today's equity for the riedel.ai Waldemar page and the finance overview."""
+    sb = supa()
+    if not sb:
+        return
+    try:
+        bal = ex.fetch_balance()
+        prices = {p: ex.fetch_ticker(p)["last"] for p in PAIRS}
+        eur = float(bal.get("EUR", {}).get("total") or 0)
+        pairs, crypto = {}, 0.0
+        last = (state.get("history") or [{}])[-1].get("pairs", {})
+        for p in PAIRS:
+            amt = float(bal.get(p.split("/")[0], {}).get("total") or 0)
+            up, close, ma = signal(ex, p)
+            value = amt * prices[p]
+            crypto += value
+            pairs[p] = {"price": prices[p], "close": close, "ma": ma, "up": up, "amount": amt, "value": round(value, 2),
+                        "action": (last.get(p) or {}).get("action", "none")}
+        equity = eur + crypto
+        dep = net_deposits(ex)
+        now = datetime.now(timezone.utc)
+        sb.table("waldemar_status").upsert({
+            "id": 1, "ts": now.isoformat(), "live": LIVE, "exchange": EXCHANGE, "ma": MA, "budget": BUDGET or None,
+            "equity": round(equity, 2), "eur": round(eur, 2), "net_deposits": dep, "last_cycle": state.get("last_cycle"), "pairs": pairs,
+        }).execute()
+        sb.table("waldemar_daily").upsert({
+            "day": now.date().isoformat(), "ts": now.isoformat(), "equity": round(equity, 2), "eur": round(eur, 2),
+            "crypto": round(crypto, 2), "net_deposits": dep, "btc": prices.get("BTC/EUR"), "eth": prices.get("ETH/EUR"),
+        }).execute()
+    except Exception as e:
+        log(f"supabase report failed: {e}")
 
 
 def due(state: dict) -> bool:
@@ -125,11 +207,12 @@ def main() -> None:
     while True:
         state = load_state()
         try:
+            ex = exchange()
             if once or due(state):
-                ex = exchange()
                 cycle(ex, state)
                 state["last_cycle"] = datetime.now(timezone.utc).date().isoformat()
                 save_state(state)
+            report(ex, state)
         except Exception as e:
             log(f"error: {e}")
         if once:

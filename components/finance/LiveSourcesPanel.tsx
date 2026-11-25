@@ -5,6 +5,7 @@ type Props = {
     total: number
     ibkr: { total_eur: number; dailyPnl_eur: number; positions: number; currency: string; available: boolean }
     edgar: { nav_eur: number; dry_run: boolean; available: boolean }
+    waldemar?: { equity_eur: number; today_eur: number; month_eur: number; total_pnl_eur: number; live: boolean; stale: boolean; available: boolean }
     realEstate: { total_eur: number; projects: number }
   } | null
   grandTotal: number
@@ -39,6 +40,19 @@ export default function LiveSourcesPanel({ sources, grandTotal }: Props) {
       daily: 0,
       available: sources.edgar.available,
       color: '#34d399',
+      href: '/edgar-scalper',
+    },
+    {
+      key: 'waldemar',
+      label: 'WALDEMAR CRYPTO',
+      value: sources.waldemar?.equity_eur || 0,
+      sub: sources.waldemar?.available
+        ? `${sources.waldemar.live ? 'live' : 'dry run'} · month ${(sources.waldemar.month_eur >= 0 ? '+' : '−')}€${Math.abs(sources.waldemar.month_eur).toFixed(0)}${sources.waldemar.stale ? ' · no update' : ''}`
+        : 'not connected',
+      daily: sources.waldemar?.today_eur || 0,
+      available: !!sources.waldemar?.available,
+      color: '#f7931a',
+      href: '/waldemar',
     },
     {
       key: 'realEstate',
@@ -73,8 +87,9 @@ export default function LiveSourcesPanel({ sources, grandTotal }: Props) {
       </div>
 
       <div style={{ padding: '2px 0' }}>
-        {rows.map(r => (
-          <div key={r.key} style={{
+        {rows.map((r: any) => (
+          <div key={r.key} onClick={() => { if (r.href) window.location.href = r.href }} style={{
+            cursor: r.href ? 'pointer' : 'default',
             display: 'grid',
             gridTemplateColumns: '140px 1fr 110px 100px 60px',
             gap: 12, alignItems: 'center',

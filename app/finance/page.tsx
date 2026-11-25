@@ -7,6 +7,7 @@ import NetWorthHero from '@/components/finance/NetWorthHero'
 import LiveSourcesPanel from '@/components/finance/LiveSourcesPanel'
 import CategorySection from '@/components/finance/CategorySection'
 import EquityTrend from '@/components/finance/EquityTrend'
+import { authFetch } from '@/lib/authFetch'
 
 type Summary = {
   total_eur: number
@@ -32,7 +33,7 @@ export default function FinancePage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const r = await fetch('/api/finance/summary', { cache: 'no-store' }).then(r => r.json()).catch(() => null)
+    const r = await authFetch('/api/finance/summary', { cache: 'no-store' }).then(r => r.json()).catch(() => null)
     setSummary(r)
     setLoading(false)
   }, [])
@@ -57,14 +58,14 @@ export default function FinancePage() {
 
   const snapshot = async () => {
     setSnapshotting(true)
-    await fetch('/api/finance/summary', { method: 'POST' })
+    await authFetch('/api/finance/summary', { method: 'POST' })
     setSnapshotting(false)
     await load()
   }
 
   const addCategory = async () => {
     if (!newCatName.trim()) return
-    await fetch('/api/finance/categories', {
+    await authFetch('/api/finance/categories', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -139,7 +140,7 @@ export default function FinancePage() {
         <div style={{ marginBottom: 16 }}>
           <NetWorthHero
             total={grandTotal}
-            monthly={(summary?.user_tracked?.monthly || 0) + (summary?.live_sources?.ibkr?.dailyPnl_eur || 0) * 21}
+            monthly={(summary?.user_tracked?.monthly || 0) + (summary?.live_sources?.ibkr?.dailyPnl_eur || 0) * 21 + (summary?.live_sources?.waldemar?.month_eur || 0)}
             yearly={summary?.user_tracked?.yearly || 0}
             loading={loading}
           />

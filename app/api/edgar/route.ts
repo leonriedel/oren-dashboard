@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { adminOnly } from '@/lib/apiAuth'
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPABASE_SECRET = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = await adminOnly(req); if (denied) return denied
   const sb = createClient(SUPABASE_URL, SUPABASE_SECRET)
 
   const [trades, signals, portfolio] = await Promise.all([

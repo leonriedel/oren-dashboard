@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Signal = {
   id: string
@@ -22,7 +23,7 @@ export default function SignalFeed() {
 
   useEffect(() => {
     const load = async () => {
-      const r = await fetch('/api/edgar/scalper/signals?limit=50').then(r => r.json()).catch(() => ({}))
+      const r = await authFetch('/api/edgar/scalper/signals?limit=50').then(r => r.json()).catch(() => ({}))
       setSignals(r.signals || [])
       setLoading(false)
     }

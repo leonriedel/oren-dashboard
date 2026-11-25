@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Trade = {
   id: string
@@ -22,7 +23,7 @@ export default function TradeJournal() {
 
   useEffect(() => {
     const load = async () => {
-      const r = await fetch('/api/edgar/scalper/trades?limit=20').then(r => r.json()).catch(() => ({}))
+      const r = await authFetch('/api/edgar/scalper/trades?limit=20').then(r => r.json()).catch(() => ({}))
       setTrades(r.trades || [])
       setLoading(false)
     }

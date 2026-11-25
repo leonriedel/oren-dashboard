@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Entry = {
   id: string
@@ -24,7 +25,7 @@ export default function ManualEntriesEditor({ onChange }: { onChange?: () => voi
 
   const load = async () => {
     setLoading(true)
-    const r = await fetch('/api/finance/manual').then(r => r.json()).catch(() => ({}))
+    const r = await authFetch('/api/finance/manual').then(r => r.json()).catch(() => ({}))
     setEntries(r.entries || [])
     setLoading(false)
   }
@@ -33,7 +34,7 @@ export default function ManualEntriesEditor({ onChange }: { onChange?: () => voi
 
   const add = async () => {
     if (!adding || !newLabel || !newAmount) return
-    await fetch('/api/finance/manual', {
+    await authFetch('/api/finance/manual', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ bucket: adding.bucket, label: newLabel, amount_eur: Number(newAmount) }),
@@ -45,13 +46,13 @@ export default function ManualEntriesEditor({ onChange }: { onChange?: () => voi
 
   const remove = async (id: string) => {
     if (!confirm('Eintrag löschen?')) return
-    await fetch(`/api/finance/manual?id=${id}`, { method: 'DELETE' })
+    await authFetch(`/api/finance/manual?id=${id}`, { method: 'DELETE' })
     await load()
     onChange?.()
   }
 
   const updateAmount = async (id: string, amount: number) => {
-    await fetch('/api/finance/manual', {
+    await authFetch('/api/finance/manual', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id, amount_eur: amount }),

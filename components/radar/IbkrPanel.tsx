@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { authFetch } from '@/lib/authFetch'
 
 type Position = {
   symbol: string
@@ -38,7 +39,7 @@ export default function IbkrPanel() {
     let abort = false
     const load = async () => {
       try {
-        const r = await fetch('/api/ibkr/flex', { cache: 'no-store' })
+        const r = await authFetch('/api/ibkr/flex', { cache: 'no-store' })
         const d = await r.json()
         if (abort) return
         if (d.error) setError(d.error)
