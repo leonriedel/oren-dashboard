@@ -253,6 +253,11 @@ def daily_cycle(b: Broker, state: dict) -> bool:
     # 2) entries
     capital = b.capital_usd()
     if capital <= 0:
+        b.ib.sleep(3)                      # account values can arrive a moment after connecting
+        capital = b.capital_usd()
+    if capital <= 0:
+        vals = [(v.tag, v.currency, v.value) for v in b.ib.accountValues(b.acct) if v.tag in ("NetLiquidation", "ExchangeRate", "AvailableFunds", "TotalCashBalance")]
+        print(f"[edgar] capital reads as 0 — no entries. account values: {vals}")
         journal.log_error("Edgar capital is 0 — fund the Edgar account")
         return True
     hwm = max(state.get("hwm", 0.0), capital)
