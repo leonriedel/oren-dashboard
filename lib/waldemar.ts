@@ -13,8 +13,9 @@ export async function waldemarSummary(supa: SupabaseClient) {
     supa.from('waldemar_trades').select('*').order('ts', { ascending: false }).limit(100),
   ])
   if (st.error && /relation|does not exist|schema cache/i.test(st.error.message)) return { available: false, needsSql: true }
+  if (st.error) return { available: false, needsSql: false, error: st.error.message }
   const status: any = st.data
-  if (!status) return { available: false, needsSql: false }
+  if (!status) return { available: false, needsSql: false, error: 'no row in waldemar_status (the bot has not written to this Supabase project)' }
 
   const daily: WDaily[] = (dl.data || []).map((d: any) => ({
     day: d.day, equity: n(d.equity) || 0, eur: n(d.eur) || 0, crypto: n(d.crypto) || 0,

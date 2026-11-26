@@ -69,7 +69,7 @@ export default function WaldemarPage() {
         </div>
 
         {loading ? <div style={{ fontFamily: MONO, fontSize: 11, color: DIM, textAlign: 'center', padding: 60 }}>Loading…</div>
-          : !d?.available ? <Empty needsSql={d?.needsSql} />
+          : !d?.available ? <Empty needsSql={d?.needsSql} error={d?.error} />
           : (
           <>
             {/* KPIs */}
@@ -267,13 +267,14 @@ function DailyBars({ daily }: { daily: { day: string; pnl: number }[] }) {
   )
 }
 
-function Empty({ needsSql }: { needsSql?: boolean }) {
+function Empty({ needsSql, error }: { needsSql?: boolean; error?: string }) {
   return (
     <div style={{ textAlign: 'center', padding: '60px 20px', border: '1px dashed rgba(80,180,255,0.2)', borderRadius: 8, color: DIM }}>
       <div style={{ fontSize: 15, color: '#f5f5f5', marginBottom: 8 }}>{needsSql ? 'One-time setup missing' : 'Waldemar has not reported yet'}</div>
       <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: 1, lineHeight: 1.8 }}>
         {needsSql ? <>RUN lib/sql/waldemar.sql IN THE SUPABASE SQL EDITOR</> : <>UPDATE WALDEMAR ON THE SERVER (git pull + docker compose up -d --build waldemar)<br />HE REPORTS EVERY 15 MINUTES</>}
       </div>
+      {error && <div style={{ marginTop: 16, fontFamily: MONO, fontSize: 10.5, color: '#fbbf24', letterSpacing: 0.5 }}>DETAIL: {error}</div>}
     </div>
   )
 }
