@@ -7,7 +7,12 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(req: Request) {
   const denied = await adminOnly(req); if (denied) return denied
-  const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY!)
+  // read with the signed-in admin's own token → works with RLS policies, independent of which server key Vercel has
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '')
+  const supa = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
   try {
     return NextResponse.json(await waldemarSummary(supa))
   } catch (e) {

@@ -39,3 +39,14 @@ create table if not exists waldemar_trades (
 alter table waldemar_status enable row level security;
 alter table waldemar_daily enable row level security;
 alter table waldemar_trades enable row level security;
+
+-- read access for the dashboard: signed-in admins may read Waldemar's tables (the bot writes with the service key)
+drop policy if exists "admins read waldemar_status" on waldemar_status;
+create policy "admins read waldemar_status" on waldemar_status for select to authenticated
+  using (coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins read waldemar_daily" on waldemar_daily;
+create policy "admins read waldemar_daily" on waldemar_daily for select to authenticated
+  using (coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+drop policy if exists "admins read waldemar_trades" on waldemar_trades;
+create policy "admins read waldemar_trades" on waldemar_trades for select to authenticated
+  using (coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');

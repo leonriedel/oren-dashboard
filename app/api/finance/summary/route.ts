@@ -90,7 +90,11 @@ export async function GET(req: Request) {
     // 3b. WALDEMAR (crypto trend bot, EUR)
     let waldemar = { equity_eur: 0, today_eur: 0, month_eur: 0, total_pnl_eur: 0, live: false, stale: false, available: false }
     try {
-      const w: any = await waldemarSummary(supa)
+      const token = (req.headers.get('authorization') || '').replace(/^Bearer /, '')
+      const userSupa = createClient(SUPA_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+        global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const w: any = await waldemarSummary(userSupa)
       if (w?.available) {
         waldemar = {
           equity_eur: Number(w.status.equity) || 0, today_eur: w.todayPnl || 0, month_eur: w.monthPnl || 0,
